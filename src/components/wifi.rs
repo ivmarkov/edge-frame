@@ -3,7 +3,7 @@ use std::{net::Ipv4Addr, str::FromStr, vec};
 use anyhow::*;
 use enumset::EnumSet;
 
-use embedded_svc::ipv4;
+use embedded_svc::{ipv4, wifi::{AuthMethod, TransitionalState}};
 use embedded_svc::wifi;
 
 use yew::prelude::*;
@@ -20,6 +20,8 @@ use crate::api;
 use crate::plugins::*;
 
 use super::common::*;
+
+use strum::EnumMessage;
 
 #[derive(Debug, Switch, Copy, Clone, PartialEq)]
 pub enum Routes {
@@ -43,33 +45,96 @@ pub fn plugin() -> SimplePlugin<Routes> {
     }
 }
 
-impl Model<wifi::Configuration> {
-    fn client_conf_read<T>(&self, getter: impl FnOnce(&wifi::ClientConfiguration) -> T) -> Option<T> {
-        self.0
-            .try_borrow()
-            .ok()?
-            .data_ref()?
-            .as_ref()
-            .as_client_conf_ref()
-            .map(getter)
+impl Loadable<Editable<wifi::Configuration>> {
+    fn client_conf(&self) -> Option<&wifi::ClientConfiguration> {
+        self.data_ref()?.as_ref().as_client_conf_ref()
     }
 
-    fn client_conf_write(&self, updater: impl FnOnce(&mut wifi::ClientConfiguration)) {
-        updater(self.0
-            .borrow_mut()
-            .data_mut()
-            .as_mut()
-            .as_client_conf_mut());
+    fn client_conf_mut(&mut self) -> &mut wifi::ClientConfiguration {
+        self.data_mut().as_mut().as_client_conf_mut()
     }
 
-    fn fixed_settings_read<T>(&self, getter: impl FnOnce(&ipv4::ClientSettings) -> T) -> Option<T> {
+    fn client_ip_conf(&self) -> Option<&ipv4::ClientConfiguration> {
+        self.client_conf()?.as_ip_conf_ref()
+    }
+
+    fn client_ip_settings(&self) -> Option<&ipv4::ClientSettings> {
+        self.client_ip_conf()?.as_fixed_settings_ref()
+    }
+
+    fn client_ip_settings_mut(&mut self) -> &mut ipv4::ClientSettings {
+        self.client_conf_mut().as_ip_conf_mut().as_fixed_settings_mut()
+    }
+}
+
+impl Model<Editable<wifi::Configuration>> {
+    fn bind_model_wifi<T: Clone + 'static>(
+            &self,
+            f: &mut Field<T>,
+            getter: fn(&wifi::ClientConfiguration) -> &T,
+            updater: fn(&mut wifi::ClientConfiguration) -> &mut T) {
+        let model_r = self.clone();
+        let model_w = self.clone();
+
+        f.bind(
+            move || model_r.0.borrow().client_conf().map(getter).map(Clone::clone),
+            move |v| *updater(model_w.0.borrow_mut().client_conf_mut()) = v);
+    }
+
+    fn bind_model_ip<Q, T>(
+            &self,
+            status: &Model<wifi::Status>,
+            f: &mut Field<Q>,
+            getter: fn(&ipv4::ClientSettings) -> &T,
+            updater: fn(&mut ipv4::ClientSettings) -> &mut T)
+            where
+                T: From<Q> + Clone + 'static,
+                Q: From<T> + Clone + 'static {
+        let model_r = self.clone();
+        let model_w = self.clone();
+        let status_model = status.clone();
+
+        f.bind(
+            move || model_r.0.borrow()
+                .client_ip_settings()
+                .or(status_model.0.borrow().client_ip_settings())
+                .map(getter)
+                .map(Clone::clone)
+                .map(Into::into),
+            move |v| *updater(model_w.0.borrow_mut().client_ip_settings_mut()) = v.into());
+    }
+}
+
+impl Loadable<wifi::Status> {
+    fn client_ip_settings(&self) -> Option<&ipv4::ClientSettings> {
         self
-            .client_conf_read(|cc| cc.as_ip_conf_ref()?.as_fixed_settings_ref().map(getter))
-            .flatten()
+            .data_ref()?
+            .0
+            .get_operating()?
+            .get_operating()?
+            .get_operating()
     }
 
-    fn fixed_settings_write(&self, updater: impl FnOnce(&mut ipv4::ClientSettings)) {
-        self.client_conf_write(|cc| updater(cc.as_ip_conf_mut().as_fixed_settings_mut()));
+    fn client_status_str(&self) -> &'static str {
+        if !self.is_loaded() {
+            return "Waiting for status info...";
+        }
+
+        let status = self.data_ref().unwrap();
+
+        match &status.0 {
+            wifi::ClientStatus::Stopped => "Stopped",
+            wifi::ClientStatus::Starting => "Starting...",
+            wifi::ClientStatus::Started(ref ss) => match ss {
+                wifi::ClientConnectionStatus::Disconnected => "Disconnected",
+                wifi::ClientConnectionStatus::Connecting => "Connecting...",
+                wifi::ClientConnectionStatus::Connected(ref cc) => match cc {
+                    wifi::ClientIpStatus::Disabled => "Connected (IP disabled)",
+                    wifi::ClientIpStatus::Waiting => "Waiting for IP...",
+                    wifi::ClientIpStatus::Done(_) =>  "Connected"
+                }
+            }
+        }
     }
 }
 
@@ -100,19 +165,28 @@ impl Fields {
 
 pub struct WiFi {
     props: PluginProps<Routes>,
-    conf: Model<wifi::Configuration>,
+    conf: Model<Editable<wifi::Configuration>>,
 
     fields: Fields,
 
     aps: Loadable<vec::Vec<wifi::AccessPointInfo>>,
+    status: Model<wifi::Status>,
+
     link: ComponentLink<Self>,
+
+    access_points_shown: bool,
 }
 
 pub enum Msg {
     GetConfiguration,
     GotConfiguration(Result<wifi::Configuration>),
+    GetStatus,
+    GotStatus(Result<wifi::Status>),
     GetAccessPoints,
     GotAccessPoints(Result<vec::Vec<wifi::AccessPointInfo>>),
+
+    ShowAccessPoints,
+    ShowConfiguration(Option<(String, AuthMethod)>),
 
     SSIDChanged(String),
     AuthMethodChanged(String),
@@ -134,78 +208,61 @@ impl WiFi {
     }
 
     fn is_loaded(&self) -> bool {
-        self.conf.0.borrow().is_loaded()
+        self.conf.0.borrow().is_loaded() && self.status.0.borrow().is_loaded()
     }
 
     fn is_dhcp(&self) -> bool {
-        self.conf.client_conf_read(|cc|
-                cc.ip_conf
-                    .as_ref()
-                    .map_or(
-                        true,
-                        |ip_conf| match ip_conf {
-                            ipv4::ClientConfiguration::DHCP => true,
-                            _ => false}))
-            .map_or(true, |v| v)
+        match self.conf.0.borrow().client_ip_conf() {
+            Some(ipv4::ClientConfiguration::DHCP) | None => true,
+            _ => false
+        }
     }
 
     fn bind_model(&mut self) {
-        let model = self.conf.clone();
+        self.conf.bind_model_wifi(
+            &mut self.fields.ssid,
+            |conf| &conf.ssid,
+            |conf| &mut conf.ssid);
 
-        let model_r = model.clone();
-        let model_w = model.clone();
+        self.conf.bind_model_wifi(
+            &mut self.fields.auth_method,
+            |conf| &conf.auth_method,
+            |conf| &mut conf.auth_method);
 
-        self.fields.ssid.bind(
-            move || model_r.client_conf_read(|cc| cc.ssid.clone()),
-            move |v| model_w.client_conf_write(|cc| cc.ssid = v));
+        self.conf.bind_model_wifi(
+            &mut self.fields.password,
+            |conf| &conf.password,
+            |conf| &mut conf.password);
 
-        let model_r = model.clone();
-        let model_w = model.clone();
+        self.conf.bind_model_ip(
+            &self.status,
+            &mut self.fields.subnet,
+            |settings| &settings.subnet,
+            |settings| &mut settings.subnet);
 
-        self.fields.auth_method.bind(
-            move || model_r.client_conf_read(|cc| cc.auth_method.clone()),
-            move |v| model_w.client_conf_write(|cc| cc.auth_method = v));
+        self.conf.bind_model_ip(
+            &self.status,
+            &mut self.fields.ip,
+            |settings| &settings.ip,
+            |settings| &mut settings.ip);
 
-        let model_r = model.clone();
-        let model_w = model.clone();
+        self.conf.bind_model_ip(
+            &self.status,
+            &mut self.fields.dns,
+            |settings| &settings.dns,
+            |settings| &mut settings.dns);
 
-        self.fields.password.bind(
-            move || model_r.client_conf_read(|cc| cc.password.clone()),
-            move |v| model_w.client_conf_write(|cc| cc.password = v));
-
-        let model_r = model.clone();
-        let model_w = model.clone();
-
-        self.fields.subnet.bind(
-            move || model_r.fixed_settings_read(|cc| cc.subnet.clone()),
-            move |v| model_w.fixed_settings_write(|cc| cc.subnet = v));
-
-        let model_r = model.clone();
-        let model_w = model.clone();
-
-        self.fields.ip.bind(
-            move || model_r.fixed_settings_read(|cc| cc.ip.clone()),
-            move |v| model_w.fixed_settings_write(|cc| cc.ip = v));
-
-        let model_r = model.clone();
-        let model_w = model.clone();
-
-        self.fields.dns.bind(
-            move || model_r.fixed_settings_read(|cc| Optional(cc.dns.clone())),
-            move |v| model_w.fixed_settings_write(|cc| cc.dns = v.0));
-
-        let model_r = model.clone();
-        let model_w = model.clone();
-
-        self.fields.secondary_dns.bind(
-            move || model_r.fixed_settings_read(|cc| Optional(cc.secondary_dns.clone())),
-            move |v| model_w.fixed_settings_write(|cc| cc.secondary_dns = v.0));
+        self.conf.bind_model_ip(
+            &self.status,
+            &mut self.fields.secondary_dns,
+            |settings| &settings.secondary_dns,
+            |settings| &mut settings.secondary_dns);
     }
 }
 
 fn as_list<T: Description + ToString + FromStr + IntoDomainIterator>(selected: Option<T>) -> Html {
     html! {
-        <List role=list::Role::ListBox>
+        <List role=ListRole::ListBox>
             {
                 for T::iter().map(|v| {
                     let selected = selected
@@ -240,13 +297,16 @@ impl Component for WiFi {
             link,
             conf: Model::new(),
             aps: Default::default(),
+            status: Default::default(),
             props,
-            fields: Default::default()
+            fields: Default::default(),
+            access_points_shown: false,
         };
 
         wifi.bind_model();
 
         wifi.link.send_message(Msg::GetConfiguration);
+        wifi.link.send_message(Msg::GetStatus);
 
         wifi
     }
@@ -268,6 +328,21 @@ impl Component for WiFi {
                 self.fields.load();
                 true
             },
+            Msg::GetStatus => {
+                let api = WiFi::create_api(self.props.api_endpoint.as_ref());
+
+                self.status.0.borrow_mut().loading();
+                self.link.send_future(async move {
+                    Msg::GotStatus(api.get_status().await)
+                });
+
+                true
+            },
+            Msg::GotStatus(result) => {
+                self.status.0.borrow_mut().loaded_result(result);
+                self.fields.load();
+                true
+            },
             Msg::GetAccessPoints => {
                 let mut api = WiFi::create_api(self.props.api_endpoint.as_ref());
 
@@ -283,6 +358,34 @@ impl Component for WiFi {
                 self.fields.load();
                 true
             },
+            Msg::ShowAccessPoints => {
+                if !self.access_points_shown {
+                    self.access_points_shown = true;
+
+                    if !self.aps.is_loaded() {
+                        self.link.send_message(Msg::GetAccessPoints);
+                    }
+
+                    true
+                } else {
+                    false
+                }
+            },
+            Msg::ShowConfiguration(data) => {
+                if self.access_points_shown {
+                    self.access_points_shown = false;
+                    if let Some((ssid, auth_method)) = data {
+                        self.conf.0.borrow_mut().client_conf_mut().ssid = ssid;
+                        self.conf.0.borrow_mut().client_conf_mut().auth_method = auth_method;
+
+                        self.fields.ssid.load();
+                        self.fields.auth_method.load();
+                    }
+                    true
+                } else {
+                    false
+                }
+            },
             Msg::SSIDChanged(value) => {
                 self.fields.ssid.update(value);
                 true
@@ -296,11 +399,11 @@ impl Component for WiFi {
                 true
             },
             Msg::DHCPChanged(dhcp) => {
-                self.conf.client_conf_write(|cc| cc.ip_conf = Some(if dhcp {
+                *self.conf.0.borrow_mut().client_conf_mut().as_ip_conf_mut() = if dhcp {
                     ipv4::ClientConfiguration::DHCP
                 } else {
                     ipv4::ClientConfiguration::Fixed(Default::default())
-                }));
+                };
 
                 true
             }
@@ -337,10 +440,68 @@ impl Component for WiFi {
     }
 
     fn view(&self) -> Html {
+        if self.access_points_shown {
+            self.view_access_points()
+        } else {
+            self.view_configuration()
+        }
+    }
+}
+
+impl WiFi {
+    fn view_access_points(&self) -> Html {
         html! {
             <>
+            <h2 class="mdc-typography--subtitle1">{"Select WiFi Network"}</h2>
+            <IconButton onclick=self.link.callback(move |_| Msg::GetAccessPoints)>
+                <i class="material-icons">{"refresh"}</i>
+            </IconButton>
+            <IconButton onclick=self.link.callback(move |_| Msg::ShowConfiguration(None))>
+                <i class="material-icons">{"close"}</i>
+            </IconButton>
+            <ProgressBar closed=!self.aps.is_loading()/>
+            <List classes="mdc-list--two-line mdc-list--icon-list">
+            {
+                for self.aps.data_ref().or(Some(&vec![])).unwrap().iter().map(|item| {
+                    let ssid = item.ssid.clone();
+                    let auth_method = item.auth_method;
+
+                    html! {
+                        <ListItem
+                            selected=false
+                            tabindex=-1
+                            value=item.ssid.clone()
+                            onclick=self.link.callback(move |_| Msg::ShowConfiguration(Some((ssid.clone(), auth_method))))
+                            role=ListItemRole::Option>
+                            <i class="material-icons mdc-list-item__graphic">
+                                {
+                                    if item.auth_method == wifi::AuthMethod::None {
+                                        "signal_wifi_4_bar"
+                                    } else {
+                                        "signal_wifi_4_bar_lock"
+                                    }
+                                }
+                            </i>
+                            <ListItemText>
+                                <ListItemPrimaryText>{item.ssid.clone()}</ListItemPrimaryText>
+                                <ListItemSecondaryText>{item.auth_method.get_message().unwrap()}</ListItemSecondaryText>
+                            </ListItemText>
+                        </ListItem>
+                    }
+                })
+            }
+            </List>
+            </>
+        }
+    }
+
+    fn view_configuration(&self) -> Html {
+        html! {
             <div class="mdc-layout-grid" style="width: 50%;">
                 <div class="mdc-layout-grid__inner">
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
+                        { self.status.0.borrow().client_status_str() }
+                    </div>
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
                         <TextField
                             outlined=true
@@ -348,7 +509,17 @@ impl Component for WiFi {
                             disabled=!self.is_loaded()
                             onchange=self.link.callback(|value| Msg::SSIDChanged(value))
                             value=self.fields.ssid.get_value_str()
-                            valid=Some(self.fields.ssid.is_valid())/>
+                            valid=Some(self.fields.ssid.is_valid())
+                            trailing_children=true
+                            classes="mdc-text-field--with-trailing-icon">
+                            <i
+                                class="material-icons mdc-text-field__icon mdc-text-field__icon--trailing"
+                                tabindex={if !self.is_loaded() {-1} else {0}}
+                                role="button"
+                                onclick=self.link.callback(|_| Msg::ShowAccessPoints)>
+                                {"search"}
+                            </i>
+                        </TextField>
                         <TextFieldHelperLine validation_msg=true>
                             { self.fields.subnet.get_error_str() }
                         </TextFieldHelperLine>
@@ -363,14 +534,28 @@ impl Component for WiFi {
                             {as_list(self.fields.auth_method.get_value())}
                         </Select>
                     </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
-                        <TextField
-                            outlined=true
-                            hint="Password"
-                            disabled=!self.is_loaded()
-                            onchange=self.link.callback(|value| Msg::PasswordChanged(value))
-                            value=self.fields.password.get_value_str()/>
-                    </div>
+                    {
+                        if Some(wifi::AuthMethod::None) != self.fields.auth_method.get_value() {
+                            html! {
+                                <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
+                                    <TextField
+                                        outlined=true
+                                        hint={
+                                            if Some(wifi::AuthMethod::WEP) == self.fields.auth_method.get_value() {
+                                                "Key"
+                                            } else {
+                                                "Password"
+                                            }
+                                        }
+                                        disabled=!self.is_loaded()
+                                        onchange=self.link.callback(|value| Msg::PasswordChanged(value))
+                                        value=self.fields.password.get_value_str()/>
+                                </div>
+                            }
+                        } else {
+                            html! {}
+                        }
+                    }
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
                         <yew_mdc::components::Switch
                             label_text="Use DHCP"
@@ -416,7 +601,6 @@ impl Component for WiFi {
                     </div>
                 </div>
             </div>
-            </>
         }
     }
 }

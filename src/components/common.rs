@@ -7,6 +7,24 @@ use strum::{EnumMessage, IntoEnumIterator};
 #[derive(Copy, Clone)]
 pub struct Optional<T>(pub Option<T>);
 
+impl<T> Optional<T> {
+    pub fn new(v: Option<T>) -> Self {
+        Self(v)
+    }
+}
+
+impl<T> From<Option<T>> for Optional<T> {
+    fn from(o: Option<T>) -> Self {
+        Self(o)
+    }
+}
+
+impl<T> From<Optional<T>> for Option<T> {
+    fn from(o: Optional<T>) -> Self {
+        o.0
+    }
+}
+
 impl<T: FromStr> FromStr for Optional<T> {
     type Err = T::Err;
 
@@ -40,7 +58,14 @@ pub enum Loadable<T> {
 impl<T> Loadable<T> {
     pub fn is_loaded(&self) -> bool {
         match self {
-            &Self::Loaded(_) => true,
+            Self::Loaded(_) | Self::Loading(Some(_)) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_loading(&self) -> bool {
+        match self {
+            Self::Loading(_) => true,
             _ => false,
         }
     }
@@ -74,6 +99,8 @@ impl<T> Loadable<T> {
     pub fn data_ref(&self) -> Option<&T> {
         if let Loadable::Loaded(data) = self {
             Some(data)
+        } else if let Loadable::Loading(Some(data)) = self {
+            Some(data)
         } else {
             None
         }
@@ -81,6 +108,8 @@ impl<T> Loadable<T> {
 
     pub fn try_data_mut(&mut self) -> Option<&mut T> {
         if let Loadable::Loaded(data) = self {
+            Some(data)
+        } else if let Loadable::Loading(Some(data)) = self {
             Some(data)
         } else {
             None
@@ -141,7 +170,7 @@ impl<T> AsMut<T> for Editable<T> {
 }
 
 #[derive(Clone)]
-pub struct Model<T>(pub Rc<RefCell<Loadable<Editable<T>>>>);
+pub struct Model<T>(pub Rc<RefCell<Loadable<T>>>);
 
 impl<T> Default for Model<T> {
     fn default() -> Self {
@@ -154,6 +183,7 @@ impl<T> Model<T> {
         Default::default()
     }
 }
+
 pub trait Description {
     fn get_description(&self) -> String;
 }

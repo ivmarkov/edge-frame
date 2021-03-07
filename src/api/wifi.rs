@@ -70,7 +70,16 @@ impl WifiAsync for Dummy {
                 secondary_channel: SecondaryChannel::None,
                 signal_strength: 3,
                 protocols: vec!(Protocol::P802D11BGN).drain(..).collect(),
-                auth_method: AuthMethod::WPA2Personal,
+                auth_method: AuthMethod::WEP,
+            },
+            AccessPointInfo {
+                ssid: "open".into(),
+                bssid: [0; 6],
+                channel: 1,
+                secondary_channel: SecondaryChannel::None,
+                signal_strength: 3,
+                protocols: vec!(Protocol::P802D11BGN).drain(..).collect(),
+                auth_method: AuthMethod::None,
             },
         ])
     }
