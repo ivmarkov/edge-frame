@@ -1,5 +1,4 @@
 #![recursion_limit="1024"]
-#![feature(result_flattening)]
 
 use wasm_bindgen::prelude::*;
 

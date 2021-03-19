@@ -116,9 +116,9 @@ pub struct Rest {
 }
 
 impl Rest {
-    pub fn new(uri: impl ToOwned<Owned = String>, headers: &collections::HashMap<String, String>) -> Self {
+    pub fn new(uri: impl Into<String>, headers: &collections::HashMap<String, String>) -> Self {
         Rest {
-            uri: uri.to_owned(),
+            uri: uri.into(),
             headers: headers.clone(),
         }
     }
