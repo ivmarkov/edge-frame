@@ -33,16 +33,16 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 yew = "0.17"
 yew-router = "0.14"
-#yew-mdc = {path = "../yew-mdc"}
-yew-mdc = {git = "https://github.com/ivmarkov/yew-mdc.git"}
+#yew-mdc = {version = "*", path = "../yew-mdc"}
+yew-mdc = {version = "*", git = "https://github.com/ivmarkov/yew-mdc.git"}
 yewtil = "*"
 surf = {version = "*", default-features = false, features = ["wasm-client"]}
 serde_json = "*"
 serde = "*"
 url = "*"
 strum = "0.20"
-#embedded-svc = {path = "../embedded-svc"}
-embedded-svc = {git = "https://github.com/ivmarkov/embedded-svc.git"}
+#embedded-svc = {version = "*", path = "../embedded-svc"}
+embedded-svc = {version = "*", git = "https://github.com/ivmarkov/embedded-svc.git"}
 
 # `wee_alloc` is a tiny allocator for wasm that is only ~1K in code size
 # compared to the default allocator's ~10K. However, it is slower than the default
