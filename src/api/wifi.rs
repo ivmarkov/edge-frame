@@ -4,6 +4,8 @@ use async_trait::async_trait;
 
 use anyhow::*;
 
+use enumset::*;
+
 use js_sys::{Function, Promise};
 
 use wasm_bindgen::{JsValue, prelude::Closure};
@@ -38,10 +40,12 @@ impl Dummy {
 
 #[async_trait]
 impl WifiAsync for Dummy {
-    async fn get_capabilities(&self) -> Result<collections::HashSet<Capability>> {
+    type Error = anyhow::Error;
+
+    async fn get_capabilities(&self) -> Result<EnumSet<Capability>, Self::Error> {
         Dummy::delay(Duration::from_millis(500)).await?;
 
-        Ok(vec!(Capability::Client, Capability::AccessPoint, Capability::Mixed).drain(..).collect())
+        Ok((Capability::Client | Capability::AccessPoint | Capability::Mixed).into())
     }
 
     async fn get_status(&self) -> Result<Status> {
@@ -50,7 +54,9 @@ impl WifiAsync for Dummy {
         Ok(Status(ClientStatus::Stopped, ApStatus::Stopped))
     }
 
-    async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>> {
+    //async fn scan_n<const N: usize = 20>(&mut self) -> Result<([AccessPointInfo; N], usize)>;
+
+    async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>, Self::Error> {
         Dummy::delay(Duration::from_millis(4000)).await?;
 
         Ok(std::vec! [
@@ -84,7 +90,7 @@ impl WifiAsync for Dummy {
         ])
     }
 
-    async fn get_configuration(&self) -> Result<Configuration> {
+    async fn get_configuration(&self) -> Result<Configuration, Self::Error> {
         Dummy::delay(Duration::from_millis(500)).await?;
 
         Ok(Configuration::Client(ClientConfiguration {
@@ -94,15 +100,7 @@ impl WifiAsync for Dummy {
         }))
     }
 
-    // async fn try_configuration(&self, _conf: &Configuration) -> Result<String> {
-    //     Ok("".into())
-    // }
-
-    // async fn get_try_configuration_result(&self, _id: &str) -> Result<IpAddr> {
-    //     Ok([192, 168, 0, 50])
-    // }
-
-    async fn set_configuration(&mut self, _conf: &Configuration) -> Result<()> {
+    async fn set_configuration(&mut self, _conf: &Configuration) -> Result<(), Self::Error> {
         Dummy::delay(Duration::from_millis(500)).await?;
 
         Ok(())
@@ -130,54 +128,37 @@ impl Rest {
 
  #[async_trait]
 impl WifiAsync for Rest {
-    async fn get_capabilities(&self) -> Result<collections::HashSet<Capability>> {
+    type Error = anyhow::Error;
+
+    async fn get_capabilities(&self) -> Result<EnumSet<Capability>, Self::Error> {
         surf::get(self.with_path_segment("/caps")?)
             .recv_json()
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    async fn get_status(&self) -> Result<Status> {
+    async fn get_status(&self) -> Result<Status, Self::Error> {
         surf::get(self.with_path_segment("")?)
             .recv_json()
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>> {
+    async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>, Self::Error> {
         surf::get(self.with_path_segment("scan")?)
             .recv_json()
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    async fn get_configuration(&self) -> anyhow::Result<Configuration> {
+    async fn get_configuration(&self) -> anyhow::Result<Configuration, Self::Error> {
         surf::get(self.with_path_segment("conf")?)
             .recv_json()
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    // async fn try_configuration(&self, conf: &Configuration) -> Result<String> {
-    //     let body = surf::Body::from_json(conf)
-    //         .map_err(|e| anyhow!(e))?;
-
-    //     surf::post(self.with_path_segment("conf_try")?)
-    //         .body(body)
-    //         .recv_string()
-    //         .await
-    //         .map_err(|e| anyhow!(e))
-    // }
-
-    // async fn get_try_configuration_result(&self, id: &str) -> Result<IpAddr> {
-    //     surf::post(self.with_path_segment("conf_try")?)
-    //         .body(surf::Body::from_string(id.into()))
-    //         .recv_json()
-    //         .await
-    //         .map_err(|e| anyhow!(e))
-    // }
-
-    async fn set_configuration(&mut self, conf: &Configuration) -> Result<()> {
+    async fn set_configuration(&mut self, conf: &Configuration) -> Result<(), Self::Error> {
         let body = surf::Body::from_json(conf)
             .map_err(|e| anyhow!(e))?;
 

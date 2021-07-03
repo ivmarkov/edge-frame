@@ -1,29 +1,37 @@
-use std::{net::Ipv4Addr, str::FromStr, vec};
+use std::{convert::TryFrom, net::Ipv4Addr, str::FromStr, vec};
 
 use anyhow::*;
+
 use enumset::EnumSet;
 
 use embedded_svc::{ipv4, wifi::{AuthMethod, TransitionalState}};
 use embedded_svc::wifi;
 
 use yew::prelude::*;
-use yew_router::prelude::Switch;
-use yew_mdc::components::*;
-use yew_mdc::components::list::*;
+
+use yew_router::prelude::Switch as Routed;
+
 use yewtil::future::*;
+
+use embedded_svc::edge_config::role::Role;
+
+use material_yew::*;
+use material_yew::select::SelectedDetail;
+use material_yew::select::ListIndex;
+use material_yew::list::GraphicType;
+use material_yew::list::RequestSelectedDetail;
+use material_yew::top_app_bar::*;
 
 use lambda::Lambda;
 
-use crate::{lambda, plugins::{Category, InsertionPoint, Role}, simple_plugins::SimplePlugin};
+use crate::{lambda, plugins::{Category, InsertionPoint}, simple_plugins::SimplePlugin};
 
 use crate::api;
 use crate::plugins::*;
 
 use super::common::*;
 
-use strum::EnumMessage;
-
-#[derive(Debug, Switch, Copy, Clone, PartialEq)]
+#[derive(Debug, Routed, Copy, Clone, PartialEq)]
 pub enum Routes {
     #[to = "/"]
     Root,
@@ -189,7 +197,7 @@ pub enum Msg {
     ShowConfiguration(Option<(String, AuthMethod)>),
 
     SSIDChanged(String),
-    AuthMethodChanged(String),
+    AuthMethodChanged(AuthMethod),
     PasswordChanged(String),
 
     DHCPChanged(bool),
@@ -197,10 +205,12 @@ pub enum Msg {
     IpChanged(String),
     DnsChanged(String),
     SecondaryDnsChanged(String),
+
+    None,
 }
 
 impl WiFi {
-    fn create_api(api_endpoint: Option<&APIEndpoint>) -> Box<dyn wifi::WifiAsync> {
+    fn create_api(api_endpoint: Option<&APIEndpoint>) -> Box<dyn wifi::WifiAsync<Error = anyhow::Error>> {
         match api_endpoint {
             None => Box::new(api::wifi::Dummy),
             Some(ep) => Box::new(api::wifi::Rest::new(ep.uri.clone(), &ep.headers)),
@@ -262,7 +272,7 @@ impl WiFi {
 
 fn as_list<T: Description + ToString + FromStr + IntoDomainIterator>(selected: Option<T>) -> Html {
     html! {
-        <List role=ListRole::ListBox>
+        <>
             {
                 for T::iter().map(|v| {
                     let selected = selected
@@ -272,19 +282,19 @@ fn as_list<T: Description + ToString + FromStr + IntoDomainIterator>(selected: O
                     as_list_item(v, selected)
                 })
             }
-        </List>
+        </>
     }
 }
 
 fn as_list_item<T: Description + ToString>(item: T, selected: bool) -> Html {
     html! {
-        <ListItem
+        <MatListItem
             selected=selected
             tabindex=0
             value=item.to_string()
-            role=list_item::Role::Option>
-            <ListItemText>{item.get_description()}</ListItemText>
-        </ListItem>
+        >
+            {item.get_description()}
+        </MatListItem>
     }
 }
 
@@ -391,7 +401,7 @@ impl Component for WiFi {
                 true
             },
             Msg::AuthMethodChanged(value) => {
-                self.fields.auth_method.update(value);
+                self.fields.auth_method.update(value.to_string());
                 true
             },
             Msg::PasswordChanged(value) => {
@@ -414,15 +424,16 @@ impl Component for WiFi {
             Msg::IpChanged(value) => {
                 self.fields.ip.update(value);
                 true
-            }
+            },
             Msg::DnsChanged(value) => {
                 self.fields.dns.update(value);
                 true
-            }
+            },
             Msg::SecondaryDnsChanged(value) => {
                 self.fields.secondary_dns.update(value);
                 true
-            }
+            },
+            Msg::None => false,
         }
     }
 
@@ -452,95 +463,115 @@ impl WiFi {
     fn view_access_points(&self) -> Html {
         html! {
             <>
-            <h2 class="mdc-typography--subtitle1">{"Select WiFi Network"}</h2>
-            <IconButton onclick=self.link.callback(move |_| Msg::GetAccessPoints)>
-                <i class="material-icons">{"refresh"}</i>
-            </IconButton>
-            <IconButton onclick=self.link.callback(move |_| Msg::ShowConfiguration(None))>
-                <i class="material-icons">{"close"}</i>
-            </IconButton>
-            <ProgressBar closed=!self.aps.is_loading()/>
-            <List classes="mdc-list--two-line mdc-list--icon-list">
-            {
-                for self.aps.data_ref().or(Some(&vec![])).unwrap().iter().map(|item| {
-                    let ssid = item.ssid.clone();
-                    let auth_method = item.auth_method;
+            <MatTopAppBar>
+                <MatTopAppBarNavigationIcon>
+                    <span onclick=self.link.callback(move |_| Msg::ShowConfiguration(None))><MatIconButton icon="close"/></span>
+                </MatTopAppBarNavigationIcon>
 
-                    html! {
-                        <ListItem
-                            selected=false
-                            tabindex=-1
-                            value=item.ssid.clone()
-                            onclick=self.link.callback(move |_| Msg::ShowConfiguration(Some((ssid.clone(), auth_method))))
-                            role=ListItemRole::Option>
-                            <i class="material-icons mdc-list-item__graphic">
-                                {
-                                    if item.auth_method == wifi::AuthMethod::None {
-                                        "signal_wifi_4_bar"
-                                    } else {
-                                        "signal_wifi_4_bar_lock"
-                                    }
-                                }
-                            </i>
-                            <ListItemText>
-                                <ListItemPrimaryText>{item.ssid.clone()}</ListItemPrimaryText>
-                                <ListItemSecondaryText>{item.auth_method.get_message().unwrap()}</ListItemSecondaryText>
-                            </ListItemText>
-                        </ListItem>
-                    }
-                })
-            }
-            </List>
+                <div slot="title">{"Select WiFi Network"}</div>
+                <MatTopAppBarActionItems>
+                    <span onclick=self.link.callback(move |_| Msg::GetAccessPoints)><MatIconButton icon="refresh"/></span>
+                </MatTopAppBarActionItems>
+            </MatTopAppBar>
+
+            <CenteredGrid>
+                <MatLinearProgress closed=!self.aps.is_loading()/>
+                <MatList>
+                {
+                    for self.aps.data_ref().or(Some(&vec![])).unwrap().iter().map(|item| {
+                        let ssid = item.ssid.clone();
+                        let auth_method = item.auth_method;
+
+                        let cb = self.link.callback(move |event: RequestSelectedDetail| {
+                            if event.selected {
+                                Msg::ShowConfiguration(Some((ssid.clone(), auth_method)))
+                            } else {
+                                Msg::None
+                            }
+                        });
+
+                        html! {
+                            <MatListItem
+                                selected=false
+                                tabindex=-1
+                                value=item.ssid.clone()
+                                graphic={GraphicType::Icon}
+                                on_request_selected=cb
+                                twoline=true
+                            >
+                                <MatIcon>{if item.auth_method == wifi::AuthMethod::None {"signal_wifi_4_bar"} else {"signal_wifi_4_bar_lock"}}</MatIcon>
+                                <span>{item.ssid.clone()}</span>
+                                <span slot="secondary">{strum::EnumMessage::get_message(&item.auth_method).unwrap()}</span>
+                            </MatListItem>
+                        }
+                    })
+                }
+                </MatList>
+            </CenteredGrid>
             </>
         }
     }
 
     fn view_configuration(&self) -> Html {
+        // TODO validity_transform={Some(MatTextField::validity_transform(|_, _| *ValidityState::new().set_bad_input(self.fields.ssid.is_valid())))}
+
         html! {
-            <div class="mdc-layout-grid" style="width: 50%;">
+            <>
+            {self.props.app_bar_renderer.as_ref().unwrap().call(())}
+            <CenteredGrid>
                 <div class="mdc-layout-grid__inner">
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
                         { self.status.0.borrow().client_status_str() }
                     </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
-                        <TextField
-                            outlined=true
-                            hint="SSID"
-                            disabled=!self.is_loaded()
-                            onchange=self.link.callback(|value| Msg::SSIDChanged(value))
-                            value=self.fields.ssid.get_value_str()
-                            valid=Some(self.fields.ssid.is_valid())
-                            trailing_children=true
-                            classes="mdc-text-field--with-trailing-icon">
-                            <i
-                                class="material-icons mdc-text-field__icon mdc-text-field__icon--trailing"
-                                tabindex={if !self.is_loaded() {-1} else {0}}
-                                role="button"
-                                onclick=self.link.callback(|_| Msg::ShowAccessPoints)>
-                                {"search"}
-                            </i>
-                        </TextField>
-                        <TextFieldHelperLine validation_msg=true>
-                            { self.fields.subnet.get_error_str() }
-                        </TextFieldHelperLine>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
-                        <Select
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                        <MatTextField
                             outlined=true
-                            hint="Authentication"
+                            label="SSID"
                             disabled=!self.is_loaded()
-                            onchange=self.link.callback(|value| Msg::AuthMethodChanged(value))
-                            value=self.fields.auth_method.get_value_str()>
+                            value=self.fields.ssid.get_value_str().to_owned()
+                            oninput=self.link.callback(|id: InputData| Msg::SSIDChanged(id.value))
+                            validate_on_initial_render=true
+                            auto_validate=true
+                            helper={ self.fields.ssid.get_error_str() }
+                        />
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                        <span slot="trailing" onclick=self.link.callback(|_| Msg::ShowAccessPoints)><MatIconButton icon="search"/></span>
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                        <MatSelect
+                            outlined=true
+                            label="Authentication"
+                            disabled=!self.is_loaded()
+                            value=self.fields.auth_method.get_value_str().to_owned()
+                            onselected=self.link.callback(|sd: SelectedDetail| match sd.index {
+                                ListIndex::Single(Some(index)) => Msg::AuthMethodChanged(AuthMethod::try_from(index as u8).unwrap()),
+                                _ => Msg::None,
+                            })
+                        >
                             {as_list(self.fields.auth_method.get_value())}
-                        </Select>
+                        </MatSelect>
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
                     {
                         if Some(wifi::AuthMethod::None) != self.fields.auth_method.get_value() {
                             html! {
-                                <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
-                                    <TextField
+                                <>
+                                <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                                </div>
+                                <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                                    <MatTextField
                                         outlined=true
-                                        hint={
+                                        label={
                                             if Some(wifi::AuthMethod::WEP) == self.fields.auth_method.get_value() {
                                                 "Key"
                                             } else {
@@ -548,60 +579,100 @@ impl WiFi {
                                             }
                                         }
                                         disabled=!self.is_loaded()
-                                        onchange=self.link.callback(|value| Msg::PasswordChanged(value))
-                                        value=self.fields.password.get_value_str()/>
+                                        value=self.fields.password.get_value_str().to_owned()
+                                        oninput=self.link.callback(|id: InputData| Msg::PasswordChanged(id.value))
+                                        validate_on_initial_render=true
+                                        auto_validate=true
+                                        helper={ self.fields.password.get_error_str() }
+                                    />
                                 </div>
+                                <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                                </div>
+                                </>
                             }
                         } else {
                             html! {}
                         }
                     }
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
-                        <yew_mdc::components::Switch
-                            label_text="Use DHCP"
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                        <span>{"Use DHCP"}</span>
+                        <MatSwitch
                             disabled=!self.is_loaded()
                             onchange=self.link.callback(|state| Msg::DHCPChanged(state))
-                            state=self.is_dhcp()/>
+                            checked=self.is_dhcp()
+                        />
                     </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
-                        <TextField
-                            outlined=true
-                            hint="Subnet/Gateway"
-                            disabled=!self.is_loaded() || self.is_dhcp()
-                            onchange=self.link.callback(|value| Msg::SubnetChanged(value))
-                            value=self.fields.subnet.get_value_str()
-                            valid=Some(self.fields.subnet.is_valid())/>
-                        <TextFieldHelperLine validation_msg=true>
-                            { self.fields.subnet.get_error_str() }
-                        </TextFieldHelperLine>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
-                        <TextField
-                            outlined=true
-                            hint="IP"
-                            disabled=!self.is_loaded() || self.is_dhcp()
-                            onchange=self.link.callback(|value| Msg::IpChanged(value))
-                            value=self.fields.ip.get_value_str()/>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
-                        <TextField
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                        <MatTextField
                             outlined=true
-                            hint="DNS"
+                            label="Subnet/Gateway"
                             disabled=!self.is_loaded() || self.is_dhcp()
-                            onchange=self.link.callback(|value| Msg::DnsChanged(value))
-                            value=self.fields.dns.get_value_str()/>
+                            value=self.fields.subnet.get_value_str().to_owned()
+                            oninput=self.link.callback(|id: InputData| Msg::SubnetChanged(id.value))
+                            validate_on_initial_render=true
+                            auto_validate=true
+                            helper={ self.fields.subnet.get_error_str() }
+                        />
                     </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-12">
-                        <TextField
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                        <MatTextField
                             outlined=true
-                            hint="Secondary DNS"
+                            label="IP"
                             disabled=!self.is_loaded() || self.is_dhcp()
-                            onchange=self.link.callback(|value| Msg::SecondaryDnsChanged(value))
-                            value=self.fields.secondary_dns.get_value_str()/>
+                            value=self.fields.ip.get_value_str().to_owned()
+                            oninput=self.link.callback(|id: InputData| Msg::IpChanged(id.value))
+                            validate_on_initial_render=true
+                            auto_validate=true
+                            helper={ self.fields.ip.get_error_str() }
+                        />
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                        <MatTextField
+                            outlined=true
+                            label="DNS"
+                            disabled=!self.is_loaded() || self.is_dhcp()
+                            value=self.fields.dns.get_value_str().to_owned()
+                            oninput=self.link.callback(|id: InputData| Msg::DnsChanged(id.value))
+                            validate_on_initial_render=true
+                            auto_validate=true
+                            helper={ self.fields.dns.get_error_str() }
+                        />
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                        <MatTextField
+                            outlined=true
+                            label="Secondary DNS"
+                            disabled=!self.is_loaded() || self.is_dhcp()
+                            value=self.fields.secondary_dns.get_value_str().to_owned()
+                            oninput=self.link.callback(|id: InputData| Msg::SecondaryDnsChanged(id.value))
+                            validate_on_initial_render=true
+                            auto_validate=true
+                            helper={ self.fields.secondary_dns.get_error_str() }
+                        />
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
                 </div>
-            </div>
+            </CenteredGrid>
+            </>
         }
     }
 }
-

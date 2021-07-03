@@ -1,28 +1,26 @@
 //! A component based on MDC `<ListItem>` that changes the route.
 
-use yew_router::{
-    agent::{RouteAgentDispatcher, RouteRequest},
-    route::Route,
-    RouterState,
-    Switch,
-};
+use material_yew::list::RequestSelectedDetail;
+use yew_router::prelude::*;
+use yew_router::prelude::Switch as Routable;
+use yew_router::agent::RouteRequest;
 
 use yew::prelude::*;
 use yew::virtual_dom::VNode;
 
-use yew_mdc::components::*;
-use yew_mdc::components::list::*;
+use material_yew::*;
+use material_yew::list::GraphicType;
 
 // TODO This should also be PartialEq and Clone. Its blocked on Children not supporting that.
 // TODO This should no longer take link & String, and instead take a route: SW implementing Switch
 /// Properties for `RouterButton` and `RouterLink`.
 #[derive(Properties, Clone, Default, Debug)]
-pub struct Props<SW>
+pub struct Props<R>
 where
-    SW: Switch + Clone,
+    R: Routable + Clone,
 {
     /// The Switched item representing the route.
-    pub route: SW,
+    pub route: R,
     /// Whether the component represents an active route.
     #[prop_or_default]
     pub active: bool,
@@ -39,19 +37,20 @@ where
 pub enum Msg {
     /// Tell the router to navigate the application to the Component's pre-defined route.
     Clicked,
+    None,
 }
 
 /// Changes the route when clicked.
 #[derive(Debug)]
-pub struct RouterListItem<SW: Switch + Clone + 'static, STATE: RouterState = ()> {
+pub struct RouterListItem<R: Routable + Clone + 'static, STATE: RouterState = ()> {
     link: ComponentLink<Self>,
     router: RouteAgentDispatcher<STATE>,
-    props: Props<SW>,
+    props: Props<R>,
 }
 
-impl<SW: Switch + Clone + 'static, STATE: RouterState> Component for RouterListItem<SW, STATE> {
+impl<R: Routable + Clone + 'static, STATE: RouterState> Component for RouterListItem<R, STATE> {
     type Message = Msg;
-    type Properties = Props<SW>;
+    type Properties = Props<R>;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let router = RouteAgentDispatcher::new();
@@ -69,6 +68,7 @@ impl<SW: Switch + Clone + 'static, STATE: RouterState> Component for RouterListI
                 self.router.send(RouteRequest::ChangeRoute(route));
                 false
             }
+            Msg::None => false,
         }
     }
 
@@ -78,26 +78,30 @@ impl<SW: Switch + Clone + 'static, STATE: RouterState> Component for RouterListI
     }
 
     fn view(&self) -> VNode {
-        let cb = self.link.callback(|event: MouseEvent| {
-            event.prevent_default();
-            Msg::Clicked
+        let cb = self.link.callback(|event: RequestSelectedDetail| {
+            if event.selected {
+                Msg::Clicked
+            } else {
+                Msg::None
+            }
         });
         html! {
-            <ListItem 
-                selected={self.props.active} 
-                tabindex={0} 
-                role={list_item::Role::Option}
-                onclick=cb
+            <MatListItem
+                selected={self.props.active}
+                tabindex=0
+                activated=true
+                graphic={if let Some(ref _icon_str) = self.props.icon {GraphicType::Icon} else {GraphicType::Null}}
+                on_request_selected=cb
             >
                 {
                     if let Some(ref icon_str) = self.props.icon {
-                        html! { <IconButton classes="material-icons">{icon_str}</IconButton> }
+                        html! { <span slot="graphic"><MatIcon>{icon_str}</MatIcon></span> }
                     } else {
                         html! {}
                     }
                 }
-                <ListItemText>{self.props.text.clone()}</ListItemText>
-            </ListItem>
+                {self.props.text.clone()}
+            </MatListItem>
         }
     }
 }

@@ -1,7 +1,9 @@
 use enumset::*;
 
 use yew::prelude::*;
-use yew_router::prelude::Switch;
+use yew_router::prelude::Switch as Routable;
+
+use embedded_svc::edge_config::role::Role;
 
 use crate::lambda;
 use crate::plugins::*;
@@ -9,7 +11,7 @@ use crate::components::router_icon_button::*;
 use crate::components::router_list_item::*;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct SimplePlugin<SW: Switch + Clone> {
+pub struct SimplePlugin<R: Routable + Clone> {
     pub name: String,
 
     pub description: Option<String>,
@@ -20,15 +22,15 @@ pub struct SimplePlugin<SW: Switch + Clone> {
     pub insertion_points: EnumSet<InsertionPoint>,
     pub category: Category,
 
-    pub route: SW,
+    pub route: R,
 
-    pub is_matching_route: lambda::Lambda<SW, bool>,
+    pub is_matching_route: lambda::Lambda<R, bool>,
 
-    pub component: lambda::Lambda<PluginProps<SW>, Html>,
+    pub component: lambda::Lambda<PluginProps<R>, Html>,
 }
 
-impl<SW: 'static + Switch + Clone> From<&SimplePlugin<SW>> for ContentPlugin<SW> {
-    fn from(simple_plugin: &SimplePlugin<SW>) -> Self {
+impl<R: 'static + Routable + Clone> From<&SimplePlugin<R>> for ContentPlugin<R> {
+    fn from(simple_plugin: &SimplePlugin<R>) -> Self {
         ContentPlugin {
             component: simple_plugin.content_component(),
             api_uri_prefix: "".into(),
@@ -36,8 +38,8 @@ impl<SW: 'static + Switch + Clone> From<&SimplePlugin<SW>> for ContentPlugin<SW>
     }
 }
 
-impl<SW: 'static + Switch + Clone> From<&SimplePlugin<SW>> for std::vec::Vec<NavigationPlugin<SW>> {
-    fn from(simple_plugin: &SimplePlugin<SW>) -> Self {
+impl<R: 'static + Routable + Clone> From<&SimplePlugin<R>> for std::vec::Vec<NavigationPlugin<R>> {
+    fn from(simple_plugin: &SimplePlugin<R>) -> Self {
         simple_plugin.insertion_points.iter()
             .map(|registration| NavigationPlugin {
                 category: simple_plugin.category,
@@ -49,24 +51,24 @@ impl<SW: 'static + Switch + Clone> From<&SimplePlugin<SW>> for std::vec::Vec<Nav
     }
 }
 
-impl<SW: 'static + Switch + Clone> SimplePlugin<SW> {
-    pub fn map<F, FR, APPSW>(
-        &self, 
-        mapper: &'static F, 
-        reverse_mapper: &FR) -> SimplePlugin<APPSW> 
+impl<R: 'static + Routable + Clone> SimplePlugin<R> {
+    pub fn map<F, FR, RAPP>(
+        &self,
+        mapper: &'static F,
+        reverse_mapper: &FR) -> SimplePlugin<RAPP>
         where
-            F: Fn(&APPSW) -> Option<SW>, 
-            FR: Fn(&SW) -> APPSW, 
-            APPSW: 'static + Switch + Clone {
+            F: Fn(&RAPP) -> Option<R>,
+            FR: Fn(&R) -> RAPP,
+            RAPP: 'static + Routable + Clone {
         let plugin_is_matching_route = self.is_matching_route.clone();
         let plugin_component = self.component.clone();
 
-        let is_matching_route = lambda::Lambda::from(move |app_route: APPSW| match mapper(&app_route) {
+        let is_matching_route = lambda::Lambda::from(move |app_route: RAPP| match mapper(&app_route) {
             Some(plugin_route) => plugin_is_matching_route.call(plugin_route),
             None => false,
         });
 
-        let component = lambda::Lambda::from(move |props: PluginProps<APPSW>| {
+        let component = lambda::Lambda::from(move |props: PluginProps<RAPP>| {
             plugin_component.call(PluginProps {
                 active_route: match props.active_route {
                     Some(ref app_route) => mapper(app_route),
@@ -74,6 +76,7 @@ impl<SW: 'static + Switch + Clone> SimplePlugin<SW> {
                 },
                 active_role: props.active_role,
                 api_endpoint: props.api_endpoint,
+                app_bar_renderer: props.app_bar_renderer,
             })
         });
 
@@ -90,27 +93,27 @@ impl<SW: 'static + Switch + Clone> SimplePlugin<SW> {
         }
     }
 
-    fn navigation_component(&self, as_list: bool) -> lambda::Lambda<PluginProps<SW>, Html> {
+    fn navigation_component(&self, as_list: bool) -> lambda::Lambda<PluginProps<R>, Html> {
         let name = self.name.clone();
         let icon = self.icon.clone();
         let route = self.route.clone();
         let min_role = self.min_role;
 
-        lambda::Lambda::from(move |props: PluginProps<SW>|
+        lambda::Lambda::from(move |props: PluginProps<R>|
             if min_role <= props.active_role {
                 if as_list {
                     html! {
-                        <RouterListItem<SW>
-                            text={name.as_str()}
+                        <RouterListItem<R>
+                            text={name.clone()}
                             icon={icon.clone()}
-                            route={route.clone()} 
-                            active={false}/> 
+                            route={route.clone()}
+                            active={false}/>
                     }
                 } else {
                     html! {
-                        <RouterIconButton<SW>
+                        <RouterIconButton<R>
                             icon={icon.clone().unwrap_or(String::from("???"))}
-                            route={route.clone()}/> 
+                            route={route.clone()}/>
                     }
                 }
             } else {
@@ -118,14 +121,14 @@ impl<SW: 'static + Switch + Clone> SimplePlugin<SW> {
             })
     }
 
-    fn content_component(&self) -> lambda::Lambda<PluginProps<SW>, Html> {
+    fn content_component(&self) -> lambda::Lambda<PluginProps<R>, Html> {
         let min_role = self.min_role;
         let is_matching_route = self.is_matching_route.clone();
         let component = self.component.clone();
-        lambda::Lambda::from(move |props: PluginProps<SW>|
-            if 
-                min_role <= props.active_role 
-                && !props.active_route.is_none() 
+        lambda::Lambda::from(move |props: PluginProps<R>|
+            if
+                min_role <= props.active_role
+                && !props.active_route.is_none()
                 && is_matching_route.call(props.active_route.clone().unwrap()) {
                 component.call(props)
             } else {

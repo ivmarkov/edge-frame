@@ -1,26 +1,24 @@
 //! A component based on MDC `<ListItem>` that changes the route.
-use yew_router::{
-    agent::{RouteAgentDispatcher, RouteRequest},
-    route::Route,
-    RouterState,
-    Switch,
-};
+
+use yew_router::prelude::*;
+use yew_router::prelude::Switch as Routable;
+use yew_router::agent::RouteRequest;
 
 use yew::prelude::*;
 use yew::virtual_dom::VNode;
 
-use yew_mdc::components::IconButton;
+use material_yew::MatIconButton;
 
 // TODO This should also be PartialEq and Clone. Its blocked on Children not supporting that.
 // TODO This should no longer take link & String, and instead take a route: SW implementing Switch
 /// Properties for `RouterButton` and `RouterLink`.
 #[derive(Properties, Clone, Default, Debug)]
-pub struct Props<SW>
+pub struct Props<R>
 where
-    SW: Switch + Clone,
+    R: Routable + Clone,
 {
     /// The Switched item representing the route.
-    pub route: SW,
+    pub route: R,
     /// The icon to display.
     #[prop_or_default]
     pub icon: String,
@@ -35,15 +33,15 @@ pub enum Msg {
 
 /// Changes the route when clicked.
 #[derive(Debug)]
-pub struct RouterIconButton<SW: Switch + Clone + 'static, STATE: RouterState = ()> {
+pub struct RouterIconButton<R: Routable + Clone + 'static, STATE: RouterState = ()> {
     link: ComponentLink<Self>,
     router: RouteAgentDispatcher<STATE>,
-    props: Props<SW>,
+    props: Props<R>,
 }
 
-impl<SW: Switch + Clone + 'static, STATE: RouterState> Component for RouterIconButton<SW, STATE> {
+impl<R: Routable + Clone + 'static, STATE: RouterState> Component for RouterIconButton<R, STATE> {
     type Message = Msg;
-    type Properties = Props<SW>;
+    type Properties = Props<R>;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let router = RouteAgentDispatcher::new();
@@ -74,6 +72,6 @@ impl<SW: Switch + Clone + 'static, STATE: RouterState> Component for RouterIconB
             event.prevent_default();
             Msg::Clicked
         });
-        html! { <IconButton classes="material-icons" onclick=cb>{self.props.icon.clone()}</IconButton> }
+        html! { <span onclick=cb><MatIconButton icon={self.props.icon.clone()}/></span> }
     }
 }

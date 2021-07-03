@@ -4,6 +4,8 @@ use anyhow::*;
 
 use strum::{EnumMessage, IntoEnumIterator};
 
+use yew::prelude::*;
+
 #[derive(Copy, Clone)]
 pub struct Optional<T>(pub Option<T>);
 
@@ -200,7 +202,7 @@ impl<T: EnumMessage> Description for T {
     }
 }
 
-impl <T: IntoEnumIterator> IntoDomainIterator for T {
+impl <I: Iterator<Item = T>, T: IntoEnumIterator<Iterator = I>> IntoDomainIterator for T {
     type Iterator = <T as IntoEnumIterator>::Iterator;
 
     fn iter() -> Self::Iterator {
@@ -272,12 +274,16 @@ impl<T: 'static> Field<T> {
         }
     }
 
-    pub fn get_value(&self) -> Option<T> {
-        (self.parser)(self.string.as_ref()).ok()
-    }
-
     pub fn get_value_str(&self) -> &str {
         self.string.as_ref()
+    }
+
+    pub fn update_value(&self) -> &str {
+        self.string.as_ref()
+    }
+
+    pub fn get_value(&self) -> Option<T> {
+        (self.parser)(self.string.as_ref()).ok()
     }
 
     pub fn is_valid(&self) -> bool {
@@ -301,5 +307,59 @@ impl<T: 'static> Field<T> {
 
     pub fn get_domain(&self) -> Vec<T> where T: IntoDomainIterator {
         T::iter().collect()
+    }
+}
+
+#[derive(Properties, Clone, PartialEq, Debug)]
+pub struct CenteredGridProps {
+    #[prop_or_default]
+    pub children: Children,
+}
+
+#[derive(Debug)]
+pub struct CenteredGrid {
+    props: CenteredGridProps,
+}
+
+pub enum CenteredGridMsg {}
+
+impl Component for CenteredGrid {
+    type Message = CenteredGridMsg;
+    type Properties = CenteredGridProps;
+
+    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        CenteredGrid {
+            props,
+        }
+    }
+
+    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        false
+    }
+
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        self.props = props;
+        true
+    }
+
+    fn view(&self) -> Html {
+        html! {
+            <div class="page">
+                <div class="mdc-layout-grid">
+                    <div class="mdc-layout-grid__inner">
+                        // Spacer
+                        <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-3 mdc-layout-grid__cell--span-2-tablet mdc-layout-grid__cell--span-1-phone"></div>
+
+                        // Content
+                        <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-6 mdc-layout-grid__cell--span-4-tablet mdc-layout-grid__cell--span-2-phone">
+                        { self.props.children.clone() }
+                        </div>
+
+                        // Spacer
+                        <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-3 mdc-layout-grid__cell--span-2-tablet mdc-layout-grid__cell--span-1-phone"></div>
+                    </div>
+                </div>
+            </div>
+        }
     }
 }
