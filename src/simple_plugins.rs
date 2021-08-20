@@ -1,17 +1,20 @@
 use enumset::*;
 
 use yew::prelude::*;
-use yew_router::prelude::Switch as Routable;
+use yew_router::prelude::Switch as Routed;
 
 use embedded_svc::edge_config::role::Role;
 
-use crate::lambda;
-use crate::plugins::*;
 use crate::components::router_icon_button::*;
 use crate::components::router_list_item::*;
+use crate::lambda;
+use crate::plugins::*;
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct SimplePlugin<R: Routable + Clone> {
+pub struct SimplePlugin<R>
+where
+    R: PartialEq + Clone,
+{
     pub name: String,
 
     pub description: Option<String>,
@@ -24,12 +27,13 @@ pub struct SimplePlugin<R: Routable + Clone> {
 
     pub route: R,
 
-    pub is_matching_route: lambda::Lambda<R, bool>,
-
     pub component: lambda::Lambda<PluginProps<R>, Html>,
 }
 
-impl<R: 'static + Routable + Clone> From<&SimplePlugin<R>> for ContentPlugin<R> {
+impl<R> From<&SimplePlugin<R>> for ContentPlugin<R>
+where
+    R: Routed + PartialEq + Clone + 'static,
+{
     fn from(simple_plugin: &SimplePlugin<R>) -> Self {
         ContentPlugin {
             component: simple_plugin.content_component(),
@@ -38,42 +42,67 @@ impl<R: 'static + Routable + Clone> From<&SimplePlugin<R>> for ContentPlugin<R> 
     }
 }
 
-impl<R: 'static + Routable + Clone> From<&SimplePlugin<R>> for std::vec::Vec<NavigationPlugin<R>> {
+impl<R> From<&SimplePlugin<R>> for std::vec::Vec<NavigationPlugin<R>>
+where
+    R: Routed + PartialEq + Clone + 'static,
+{
     fn from(simple_plugin: &SimplePlugin<R>) -> Self {
-        simple_plugin.insertion_points.iter()
+        simple_plugin
+            .insertion_points
+            .iter()
             .map(|registration| NavigationPlugin {
                 category: simple_plugin.category,
                 insertion_point: registration,
-                component: simple_plugin.navigation_component(registration == InsertionPoint::Drawer),
+                component: simple_plugin
+                    .navigation_component(registration == InsertionPoint::Drawer),
                 api_uri_prefix: "".into(),
             })
             .collect()
     }
 }
 
-impl<R: 'static + Routable + Clone> SimplePlugin<R> {
-    pub fn map<F, FR, RAPP>(
-        &self,
-        mapper: &'static F,
-        reverse_mapper: &FR) -> SimplePlugin<RAPP>
-        where
-            F: Fn(&RAPP) -> Option<R>,
-            FR: Fn(&R) -> RAPP,
-            RAPP: 'static + Routable + Clone {
-        let plugin_is_matching_route = self.is_matching_route.clone();
-        let plugin_component = self.component.clone();
+struct SimplePluginIterator<'a, R, I>
+where
+    R: PartialEq + Clone,
+{
+    simple_plugin: &'a SimplePlugin<R>,
+    insertion_point_iter: I,
+}
 
-        let is_matching_route = lambda::Lambda::from(move |app_route: RAPP| match mapper(&app_route) {
-            Some(plugin_route) => plugin_is_matching_route.call(plugin_route),
-            None => false,
-        });
+impl<'a, R, I> Iterator for SimplePluginIterator<'a, R, I>
+where
+    R: Routed + PartialEq + Clone + 'static,
+    I: Iterator<Item = InsertionPoint>,
+{
+    type Item = NavigationPlugin<R>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(insertion_point) = self.insertion_point_iter.next() {
+            Some(NavigationPlugin {
+                category: self.simple_plugin.category,
+                insertion_point,
+                component: self
+                    .simple_plugin
+                    .navigation_component(insertion_point == InsertionPoint::Drawer),
+                api_uri_prefix: "".into(),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl SimplePlugin<bool> {
+    pub fn map<RAPP>(&self, route: RAPP) -> SimplePlugin<RAPP>
+    where
+        RAPP: PartialEq + Clone + 'static,
+    {
+        let plugin_component = self.component.clone();
+        let croute = route.clone();
 
         let component = lambda::Lambda::from(move |props: PluginProps<RAPP>| {
             plugin_component.call(PluginProps {
-                active_route: match props.active_route {
-                    Some(ref app_route) => mapper(app_route),
-                    None => None,
-                },
+                active_route: props.active_route == croute,
                 active_role: props.active_role,
                 api_endpoint: props.api_endpoint,
                 app_bar_renderer: props.app_bar_renderer,
@@ -87,9 +116,20 @@ impl<R: 'static + Routable + Clone> SimplePlugin<R> {
             min_role: self.min_role,
             insertion_points: self.insertion_points.clone(),
             category: self.category,
-            route: reverse_mapper(&self.route),
-            is_matching_route: is_matching_route,
+            route,
             component: component,
+        }
+    }
+}
+
+impl<R> SimplePlugin<R>
+where
+    R: Routed + PartialEq + Clone + 'static,
+{
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = NavigationPlugin<R>> + 'a {
+        SimplePluginIterator {
+            simple_plugin: self,
+            insertion_point_iter: self.insertion_points.iter(),
         }
     }
 
@@ -99,7 +139,7 @@ impl<R: 'static + Routable + Clone> SimplePlugin<R> {
         let route = self.route.clone();
         let min_role = self.min_role;
 
-        lambda::Lambda::from(move |props: PluginProps<R>|
+        lambda::Lambda::from(move |props: PluginProps<R>| {
             if min_role <= props.active_role {
                 if as_list {
                     html! {
@@ -107,7 +147,7 @@ impl<R: 'static + Routable + Clone> SimplePlugin<R> {
                             text={name.clone()}
                             icon={icon.clone()}
                             route={route.clone()}
-                            active={false}/>
+                            active={props.active_route == route}/>
                     }
                 } else {
                     html! {
@@ -118,21 +158,20 @@ impl<R: 'static + Routable + Clone> SimplePlugin<R> {
                 }
             } else {
                 html! {}
-            })
+            }
+        })
     }
 
     fn content_component(&self) -> lambda::Lambda<PluginProps<R>, Html> {
         let min_role = self.min_role;
-        let is_matching_route = self.is_matching_route.clone();
+        let route = self.route.clone();
         let component = self.component.clone();
-        lambda::Lambda::from(move |props: PluginProps<R>|
-            if
-                min_role <= props.active_role
-                && !props.active_route.is_none()
-                && is_matching_route.call(props.active_route.clone().unwrap()) {
+        lambda::Lambda::from(move |props: PluginProps<R>| {
+            if min_role <= props.active_role && props.active_route == route {
                 component.call(props)
             } else {
                 html! {}
-            })
+            }
+        })
     }
 }

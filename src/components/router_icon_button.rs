@@ -1,8 +1,8 @@
 //! A component based on MDC `<ListItem>` that changes the route.
 
-use yew_router::prelude::*;
-use yew_router::prelude::Switch as Routable;
 use yew_router::agent::RouteRequest;
+use yew_router::prelude::Switch as Routable;
+use yew_router::prelude::*;
 
 use yew::prelude::*;
 use yew::virtual_dom::VNode;

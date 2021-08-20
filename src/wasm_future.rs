@@ -1,4 +1,8 @@
-use std::{future::Future, pin::Pin, task::{Context, Poll}};
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 pub struct WasmFuture<T> {
     fut: Pin<Box<dyn Future<Output = T> + 'static>>,

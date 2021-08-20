@@ -1,6 +1,6 @@
 [package]
 name = "edge-frame"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Ivan Markov <ivan.markov@gmail.com>"]
 edition = "2018"
 categories = ["embedded", "hardware-support", "ui"]
@@ -21,6 +21,9 @@ opt-level = 'z'
 # If you uncomment this line, it will enable `wee_alloc`:
 #default = ["wee_alloc"]
 
+[patch.crates-io]
+embedded-svc = { path = "../embedded-svc" }
+
 [dependencies]
 # The `wasm-bindgen` crate provides the bare minimum functionality needed
 # to interact with JavaScript.
@@ -39,9 +42,8 @@ serde_json = "1"
 serde = "1"
 url = "2"
 strum = {version = "0.21"}
-embedded-svc = {version = "0.7", git = "https://github.com/ivmarkov/embedded-svc.git"}
-#embedded-svc = {path = "../embedded-svc", features = ["std"]}
 getrandom = {version = "0.2", features = ["js"]}
+embedded-svc = "0.8"
 
 # `wee_alloc` is a tiny allocator for wasm that is only ~1K in code size
 # compared to the default allocator's ~10K. However, it is slower than the default

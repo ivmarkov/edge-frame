@@ -45,7 +45,7 @@ impl<T: ToString> ToString for Optional<T> {
     fn to_string(&self) -> String {
         match self.0.as_ref() {
             None => "".into(),
-            Some(v) => v.to_string()
+            Some(v) => v.to_string(),
         }
     }
 }
@@ -54,7 +54,7 @@ impl<T: ToString> ToString for Optional<T> {
 pub enum Loadable<T> {
     Not,
     Loading(Option<T>),
-    Loaded(T)
+    Loaded(T),
 }
 
 impl<T> Loadable<T> {
@@ -132,14 +132,14 @@ impl<T> Default for Loadable<T> {
 #[derive(Copy, Clone)]
 pub struct Editable<T> {
     changed: bool,
-    data: T
+    data: T,
 }
 
 impl<T> Editable<T> {
     pub fn new(data: T) -> Self {
         Self {
             changed: false,
-            data
+            data,
         }
     }
 
@@ -202,7 +202,7 @@ impl<T: EnumMessage> Description for T {
     }
 }
 
-impl <I: Iterator<Item = T>, T: IntoEnumIterator<Iterator = I>> IntoDomainIterator for T {
+impl<I: Iterator<Item = T>, T: IntoEnumIterator<Iterator = I>> IntoDomainIterator for T {
     type Iterator = <T as IntoEnumIterator>::Iterator;
 
     fn iter() -> Self::Iterator {
@@ -222,29 +222,36 @@ pub struct Field<T> {
 impl<T: FromStr + ToString + 'static> Default for Field<T> {
     fn default() -> Self {
         Self::new(
-            |s: &str| s.trim().parse::<T>().map_err(|_| Error::msg("Invalid format")),
-            |t| t.to_string())
+            |s: &str| {
+                s.trim()
+                    .parse::<T>()
+                    .map_err(|_| Error::msg("Invalid format"))
+            },
+            |t| t.to_string(),
+        )
     }
 }
 
 impl<T: 'static> Field<T> {
     pub fn new(
-            parser: impl Fn(&str) -> Result<T> + 'static,
-            stringifier: impl Fn(T) -> String + 'static) -> Self {
+        parser: impl Fn(&str) -> Result<T> + 'static,
+        stringifier: impl Fn(T) -> String + 'static,
+    ) -> Self {
         Self {
             string: Default::default(),
             error: None,
             parser: Box::new(parser),
             stringifier: Box::new(stringifier),
             getter: Box::new(|| None),
-            updater: Box::new(|_| {})
+            updater: Box::new(|_| {}),
         }
     }
 
     pub fn bind(
-            &mut self,
-            getter: impl Fn() -> Option<T> + 'static,
-            updater: impl Fn(T) + 'static) {
+        &mut self,
+        getter: impl Fn() -> Option<T> + 'static,
+        updater: impl Fn(T) + 'static,
+    ) {
         self.getter = Box::new(getter);
         self.updater = Box::new(updater);
 
@@ -266,7 +273,7 @@ impl<T: 'static> Field<T> {
                 Ok(data) => {
                     self.error = None;
                     (self.updater)(data);
-                },
+                }
                 Err(err) => {
                     self.error = Some(err.to_string());
                 }
@@ -289,7 +296,7 @@ impl<T: 'static> Field<T> {
     pub fn is_valid(&self) -> bool {
         match &self.error {
             None => true,
-            Some(_) => false
+            Some(_) => false,
         }
     }
 
@@ -301,11 +308,17 @@ impl<T: 'static> Field<T> {
         self.error.clone().unwrap_or("".to_owned())
     }
 
-    pub fn get_description(v: T) -> String where T: Description {
+    pub fn get_description(v: T) -> String
+    where
+        T: Description,
+    {
         v.get_description()
     }
 
-    pub fn get_domain(&self) -> Vec<T> where T: IntoDomainIterator {
+    pub fn get_domain(&self) -> Vec<T>
+    where
+        T: IntoDomainIterator,
+    {
         T::iter().collect()
     }
 }
@@ -327,13 +340,11 @@ impl Component for CenteredGrid {
     type Message = CenteredGridMsg;
     type Properties = CenteredGridProps;
 
-    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        CenteredGrid {
-            props,
-        }
+    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+        CenteredGrid { props }
     }
 
-    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
         false
     }
 

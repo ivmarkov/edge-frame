@@ -1,8 +1,8 @@
-#![recursion_limit="1024"]
+#![recursion_limit = "1024"]
 
-pub mod lambda;
-pub mod wasm_future;
+pub mod api;
 pub mod components;
+pub mod lambda;
 pub mod plugins;
 pub mod simple_plugins;
-pub mod api;
+pub mod wasm_future;

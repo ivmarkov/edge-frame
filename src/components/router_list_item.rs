@@ -1,15 +1,15 @@
 //! A component based on MDC `<ListItem>` that changes the route.
 
 use material_yew::list::RequestSelectedDetail;
-use yew_router::prelude::*;
-use yew_router::prelude::Switch as Routable;
 use yew_router::agent::RouteRequest;
+use yew_router::prelude::Switch as Routable;
+use yew_router::prelude::*;
 
 use yew::prelude::*;
 use yew::virtual_dom::VNode;
 
-use material_yew::*;
 use material_yew::list::GraphicType;
+use material_yew::*;
 
 // TODO This should also be PartialEq and Clone. Its blocked on Children not supporting that.
 // TODO This should no longer take link & String, and instead take a route: SW implementing Switch
@@ -89,7 +89,7 @@ impl<R: Routable + Clone + 'static, STATE: RouterState> Component for RouterList
             <MatListItem
                 selected={self.props.active}
                 tabindex=0
-                activated=true
+                activated={self.props.active}
                 graphic={if let Some(ref _icon_str) = self.props.icon {GraphicType::Icon} else {GraphicType::Null}}
                 on_request_selected=cb
             >

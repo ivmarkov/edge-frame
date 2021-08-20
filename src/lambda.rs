@@ -41,9 +41,7 @@ impl<IN, OUT> PartialEq for Lambda<IN, OUT> {
     fn eq(&self, other: &Lambda<IN, OUT>) -> bool {
         match (&self, &other) {
             (Lambda::Lambda(cb), Lambda::Lambda(other_cb)) => Rc::ptr_eq(cb, other_cb),
-            (Lambda::LambdaOnce(cb), Lambda::LambdaOnce(other_cb)) => {
-                Rc::ptr_eq(cb, other_cb)
-            }
+            (Lambda::LambdaOnce(cb), Lambda::LambdaOnce(other_cb)) => Rc::ptr_eq(cb, other_cb),
             _ => false,
         }
     }
@@ -88,7 +86,7 @@ impl<IN, OUT: Default> Lambda<IN, OUT> {
     /// Creates a "no-op" closure which can be used when it is not suitable to use an
     /// `Option<Lambda>`.
     pub fn noop() -> Self {
-        Self::from(|_| -> OUT {Default::default()})
+        Self::from(|_| -> OUT { Default::default() })
     }
 }
 
@@ -104,12 +102,10 @@ impl<IN: 'static, OUT: 'static> Lambda<IN, OUT> {
     pub fn reform<FI, FO, A, R>(&self, map_input: FI, map_output: FO) -> Lambda<A, R>
     where
         FI: Fn(A) -> IN + 'static,
-        FO: Fn(OUT) -> R + 'static
+        FO: Fn(OUT) -> R + 'static,
     {
         let this = self.clone();
-        let func = move |input| {
-            map_output(this.call(map_input(input)))
-        };
+        let func = move |input| map_output(this.call(map_input(input)));
         Lambda::from(func)
     }
 }

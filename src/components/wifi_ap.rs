@@ -1,14 +1,11 @@
-use std::{convert::TryFrom, net::Ipv4Addr, str::FromStr, vec};
+use std::{cell::RefCell, convert::TryFrom, net::Ipv4Addr, rc::Rc, str::FromStr, vec};
 
 use anyhow::*;
 
 use enumset::EnumSet;
 
 use embedded_svc::wifi;
-use embedded_svc::{
-    ipv4,
-    wifi::{AuthMethod, TransitionalState},
-};
+use embedded_svc::{ipv4, wifi::AuthMethod};
 
 use yew::prelude::*;
 
@@ -16,11 +13,8 @@ use yewtil::future::*;
 
 use embedded_svc::edge_config::role::Role;
 
-use material_yew::list::GraphicType;
-use material_yew::list::RequestSelectedDetail;
 use material_yew::select::ListIndex;
 use material_yew::select::SelectedDetail;
-use material_yew::top_app_bar::*;
 use material_yew::*;
 
 use lambda::Lambda;
@@ -38,8 +32,8 @@ use super::common::*;
 
 pub fn plugin() -> SimplePlugin<bool> {
     SimplePlugin {
-        name: "WiFi".into(),
-        description: Some("A settings user interface for configuring WiFi access".into()),
+        name: "WiFi Ap".into(),
+        description: Some("A settings user interface for configuring WiFi Access Point".into()),
         icon: Some("wifi".into()),
         min_role: Role::Admin,
         insertion_points: EnumSet::only(InsertionPoint::Drawer)
@@ -48,116 +42,88 @@ pub fn plugin() -> SimplePlugin<bool> {
         route: true,
         component: Lambda::from(|props| {
             html! {
-                <WiFi with props/>
+                <WiFiAp with props/>
             }
         }),
     }
 }
 
 impl Loadable<Editable<wifi::Configuration>> {
-    fn client_conf(&self) -> Option<&wifi::ClientConfiguration> {
-        self.data_ref()?.as_ref().as_client_conf_ref()
+    fn ap_conf(&self) -> Option<&wifi::AccessPointConfiguration> {
+        self.data_ref()?.as_ref().as_ap_conf_ref()
     }
 
-    fn client_conf_mut(&mut self) -> &mut wifi::ClientConfiguration {
-        self.data_mut().as_mut().as_client_conf_mut()
+    fn ap_conf_mut(&mut self) -> &mut wifi::AccessPointConfiguration {
+        self.data_mut().as_mut().as_ap_conf_mut()
     }
 
-    fn client_ip_conf(&self) -> Option<&ipv4::ClientConfiguration> {
-        self.client_conf()?.as_ip_conf_ref()
+    fn ap_ip_conf(&self) -> Option<&ipv4::RouterConfiguration> {
+        self.ap_conf()?.as_ip_conf_ref()
     }
 
-    fn client_ip_settings(&self) -> Option<&ipv4::ClientSettings> {
-        self.client_ip_conf()?.as_fixed_settings_ref()
-    }
-
-    fn client_ip_settings_mut(&mut self) -> &mut ipv4::ClientSettings {
-        self.client_conf_mut()
-            .as_ip_conf_mut()
-            .as_fixed_settings_mut()
+    fn ap_ip_conf_mut(&mut self) -> &mut ipv4::RouterConfiguration {
+        self.ap_conf_mut().as_ip_conf_mut()
     }
 }
 
 impl Model<Editable<wifi::Configuration>> {
-    fn bind_model_wifi<T: Clone + 'static>(
+    fn bind_model_wifi_ap<T: Clone + 'static>(
         &self,
         f: &mut Field<T>,
-        getter: fn(&wifi::ClientConfiguration) -> &T,
-        updater: fn(&mut wifi::ClientConfiguration) -> &mut T,
+        getter: fn(&wifi::AccessPointConfiguration) -> &T,
+        updater: fn(&mut wifi::AccessPointConfiguration) -> &mut T,
     ) {
         let model_r = self.clone();
         let model_w = self.clone();
 
         f.bind(
-            move || {
-                model_r
-                    .0
-                    .borrow()
-                    .client_conf()
-                    .map(getter)
-                    .map(Clone::clone)
-            },
-            move |v| *updater(model_w.0.borrow_mut().client_conf_mut()) = v,
+            move || model_r.0.borrow().ap_conf().map(getter).map(Clone::clone),
+            move |v| *updater(model_w.0.borrow_mut().ap_conf_mut()) = v,
         );
     }
 
-    fn bind_model_ip<Q, T>(
+    fn bind_model_ip_ap<Q, T>(
         &self,
-        status: &Model<wifi::Status>,
         f: &mut Field<Q>,
-        getter: fn(&ipv4::ClientSettings) -> &T,
-        updater: fn(&mut ipv4::ClientSettings) -> &mut T,
+        getter: fn(&ipv4::RouterConfiguration) -> &T,
+        updater: fn(&mut ipv4::RouterConfiguration) -> &mut T,
     ) where
         T: From<Q> + Clone + 'static,
         Q: From<T> + Clone + 'static,
     {
         let model_r = self.clone();
         let model_w = self.clone();
-        let status_model = status.clone();
 
         f.bind(
             move || {
                 model_r
                     .0
                     .borrow()
-                    .client_ip_settings()
-                    .or(status_model.0.borrow().client_ip_settings())
+                    .ap_ip_conf()
                     .map(getter)
                     .map(Clone::clone)
                     .map(Into::into)
             },
-            move |v| *updater(model_w.0.borrow_mut().client_ip_settings_mut()) = v.into(),
+            move |v| *updater(model_w.0.borrow_mut().ap_ip_conf_mut()) = v.into(),
         );
     }
 }
 
 impl Loadable<wifi::Status> {
-    fn client_ip_settings(&self) -> Option<&ipv4::ClientSettings> {
-        self.data_ref()?
-            .0
-            .get_operating()?
-            .get_operating()?
-            .get_operating()
-    }
-
-    fn client_status_str(&self) -> &'static str {
+    fn ap_status_str(&self) -> &'static str {
         if !self.is_loaded() {
             return "Waiting for status info...";
         }
 
         let status = self.data_ref().unwrap();
 
-        match &status.0 {
-            wifi::ClientStatus::Stopped => "Stopped",
-            wifi::ClientStatus::Starting => "Starting...",
-            wifi::ClientStatus::Started(ref ss) => match ss {
-                wifi::ClientConnectionStatus::Disconnected => "Disconnected",
-                wifi::ClientConnectionStatus::Connecting => "Connecting...",
-                wifi::ClientConnectionStatus::Connected(ref cc) => match cc {
-                    wifi::ClientIpStatus::Disabled => "Connected (IP disabled)",
-                    wifi::ClientIpStatus::Waiting => "Waiting for IP...",
-                    wifi::ClientIpStatus::Done(_) => "Connected",
-                },
+        match &status.1 {
+            wifi::ApStatus::Stopped => "Stopped",
+            wifi::ApStatus::Starting => "Starting...",
+            wifi::ApStatus::Started(ref ss) => match ss {
+                wifi::ApIpStatus::Disabled => "Disabled",
+                wifi::ApIpStatus::Waiting => "Waiting for IP...",
+                wifi::ApIpStatus::Done => "Connected",
             },
         }
     }
@@ -168,9 +134,9 @@ struct Fields {
     ssid: Field<String>,
     auth_method: Field<wifi::AuthMethod>,
     password: Field<String>,
+    password_confirmed: Field<String>,
 
     subnet: Field<ipv4::Subnet>,
-    ip: Field<Ipv4Addr>,
     dns: Field<Optional<Ipv4Addr>>,
     secondary_dns: Field<Optional<Ipv4Addr>>,
 }
@@ -180,26 +146,25 @@ impl Fields {
         self.ssid.load();
         self.auth_method.load();
         self.password.load();
+        self.password_confirmed.load();
 
         self.subnet.load();
-        self.ip.load();
         self.dns.load();
         self.secondary_dns.load();
     }
 }
 
-pub struct WiFi {
+pub struct WiFiAp {
     props: PluginProps<bool>,
     conf: Model<Editable<wifi::Configuration>>,
 
     fields: Fields,
 
-    aps: Loadable<vec::Vec<wifi::AccessPointInfo>>,
+    password_confirmed: Rc<RefCell<String>>,
+
     status: Model<wifi::Status>,
 
     link: ComponentLink<Self>,
-
-    access_points_shown: bool,
 }
 
 pub enum Msg {
@@ -207,26 +172,22 @@ pub enum Msg {
     GotConfiguration(Result<wifi::Configuration>),
     GetStatus,
     GotStatus(Result<wifi::Status>),
-    GetAccessPoints,
-    GotAccessPoints(Result<vec::Vec<wifi::AccessPointInfo>>),
-
-    ShowAccessPoints,
-    ShowConfiguration(Option<(String, AuthMethod)>),
 
     SSIDChanged(String),
+    SSIDHiddenChanged(bool),
     AuthMethodChanged(AuthMethod),
     PasswordChanged(String),
+    PasswordConfirmedChanged(String),
 
-    DHCPChanged(bool),
     SubnetChanged(String),
-    IpChanged(String),
+    DHCPEnabledChanged(bool),
     DnsChanged(String),
     SecondaryDnsChanged(String),
 
     None,
 }
 
-impl WiFi {
+impl WiFiAp {
     fn create_api(
         api_endpoint: Option<&APIEndpoint>,
     ) -> Box<dyn wifi::WifiAsync<Error = anyhow::Error>> {
@@ -240,55 +201,46 @@ impl WiFi {
         self.conf.0.borrow().is_loaded() && self.status.0.borrow().is_loaded()
     }
 
-    fn is_dhcp(&self) -> bool {
-        match self.conf.0.borrow().client_ip_conf() {
-            Some(ipv4::ClientConfiguration::DHCP) | None => true,
-            _ => false,
-        }
-    }
-
     fn bind_model(&mut self) {
-        self.conf.bind_model_wifi(
+        self.conf.bind_model_wifi_ap(
             &mut self.fields.ssid,
             |conf| &conf.ssid,
             |conf| &mut conf.ssid,
         );
 
-        self.conf.bind_model_wifi(
+        self.conf.bind_model_wifi_ap(
             &mut self.fields.auth_method,
             |conf| &conf.auth_method,
             |conf| &mut conf.auth_method,
         );
 
-        self.conf.bind_model_wifi(
+        self.conf.bind_model_wifi_ap(
             &mut self.fields.password,
             |conf| &conf.password,
             |conf| &mut conf.password,
         );
 
-        self.conf.bind_model_ip(
-            &self.status,
+        let password_confirmed_g = self.password_confirmed.clone();
+        let password_confirmed_u = self.password_confirmed.clone();
+
+        self.fields.password_confirmed.bind(
+            move || Some(password_confirmed_g.borrow().clone()),
+            move |value| *password_confirmed_u.borrow_mut() = value,
+        );
+
+        self.conf.bind_model_ip_ap(
             &mut self.fields.subnet,
             |settings| &settings.subnet,
             |settings| &mut settings.subnet,
         );
 
-        self.conf.bind_model_ip(
-            &self.status,
-            &mut self.fields.ip,
-            |settings| &settings.ip,
-            |settings| &mut settings.ip,
-        );
-
-        self.conf.bind_model_ip(
-            &self.status,
+        self.conf.bind_model_ip_ap(
             &mut self.fields.dns,
             |settings| &settings.dns,
             |settings| &mut settings.dns,
         );
 
-        self.conf.bind_model_ip(
-            &self.status,
+        self.conf.bind_model_ip_ap(
             &mut self.fields.secondary_dns,
             |settings| &settings.secondary_dns,
             |settings| &mut settings.secondary_dns,
@@ -324,7 +276,7 @@ fn as_list_item<T: Description + ToString>(item: T, selected: bool) -> Html {
     }
 }
 
-impl Component for WiFi {
+impl Component for WiFiAp {
     type Message = Msg;
     type Properties = PluginProps<bool>;
 
@@ -332,11 +284,10 @@ impl Component for WiFi {
         let mut wifi = Self {
             link,
             conf: Model::new(),
-            aps: Default::default(),
             status: Default::default(),
             props,
             fields: Default::default(),
-            access_points_shown: false,
+            password_confirmed: Rc::new(RefCell::new("".into())),
         };
 
         wifi.bind_model();
@@ -381,50 +332,12 @@ impl Component for WiFi {
                 self.fields.load();
                 true
             }
-            Msg::GetAccessPoints => {
-                let mut api = Self::create_api(self.props.api_endpoint.as_ref());
-
-                self.aps.loading();
-                self.link
-                    .send_future(async move { Msg::GotAccessPoints(api.scan().await) });
-
-                true
-            }
-            Msg::GotAccessPoints(result) => {
-                self.aps.loaded_result(result);
-                self.fields.load();
-                true
-            }
-            Msg::ShowAccessPoints => {
-                if !self.access_points_shown {
-                    self.access_points_shown = true;
-
-                    if !self.aps.is_loaded() {
-                        self.link.send_message(Msg::GetAccessPoints);
-                    }
-
-                    true
-                } else {
-                    false
-                }
-            }
-            Msg::ShowConfiguration(data) => {
-                if self.access_points_shown {
-                    self.access_points_shown = false;
-                    if let Some((ssid, auth_method)) = data {
-                        self.conf.0.borrow_mut().client_conf_mut().ssid = ssid;
-                        self.conf.0.borrow_mut().client_conf_mut().auth_method = auth_method;
-
-                        self.fields.ssid.load();
-                        self.fields.auth_method.load();
-                    }
-                    true
-                } else {
-                    false
-                }
-            }
             Msg::SSIDChanged(value) => {
                 self.fields.ssid.update(value);
+                true
+            }
+            Msg::SSIDHiddenChanged(value) => {
+                self.conf.0.borrow_mut().ap_conf_mut().ssid_hidden = value;
                 true
             }
             Msg::AuthMethodChanged(value) => {
@@ -435,21 +348,21 @@ impl Component for WiFi {
                 self.fields.password.update(value);
                 true
             }
-            Msg::DHCPChanged(dhcp) => {
-                *self.conf.0.borrow_mut().client_conf_mut().as_ip_conf_mut() = if dhcp {
-                    ipv4::ClientConfiguration::DHCP
-                } else {
-                    ipv4::ClientConfiguration::Fixed(Default::default())
-                };
-
+            Msg::PasswordConfirmedChanged(value) => {
+                self.fields.password_confirmed.update(value);
                 true
             }
             Msg::SubnetChanged(value) => {
                 self.fields.subnet.update(value);
                 true
             }
-            Msg::IpChanged(value) => {
-                self.fields.ip.update(value);
+            Msg::DHCPEnabledChanged(value) => {
+                self.conf
+                    .0
+                    .borrow_mut()
+                    .ap_conf_mut()
+                    .as_ip_conf_mut()
+                    .dhcp_enabled = value;
                 true
             }
             Msg::DnsChanged(value) => {
@@ -467,7 +380,6 @@ impl Component for WiFi {
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if self.props.api_endpoint != props.api_endpoint {
             self.conf = Model::new();
-            self.aps = Default::default();
             self.props = props;
             self.bind_model();
 
@@ -478,67 +390,11 @@ impl Component for WiFi {
     }
 
     fn view(&self) -> Html {
-        if self.access_points_shown {
-            self.view_access_points()
-        } else {
-            self.view_configuration()
-        }
+        self.view_configuration()
     }
 }
 
-impl WiFi {
-    fn view_access_points(&self) -> Html {
-        html! {
-            <>
-            <MatTopAppBar>
-                <MatTopAppBarNavigationIcon>
-                    <span onclick=self.link.callback(move |_| Msg::ShowConfiguration(None))><MatIconButton icon="close"/></span>
-                </MatTopAppBarNavigationIcon>
-
-                <div slot="title">{"Select WiFi Network"}</div>
-                <MatTopAppBarActionItems>
-                    <span onclick=self.link.callback(move |_| Msg::GetAccessPoints)><MatIconButton icon="refresh"/></span>
-                </MatTopAppBarActionItems>
-            </MatTopAppBar>
-
-            <CenteredGrid>
-                <MatLinearProgress closed=!self.aps.is_loading()/>
-                <MatList>
-                {
-                    for self.aps.data_ref().or(Some(&vec![])).unwrap().iter().map(|item| {
-                        let ssid = item.ssid.clone();
-                        let auth_method = item.auth_method;
-
-                        let cb = self.link.callback(move |event: RequestSelectedDetail| {
-                            if event.selected {
-                                Msg::ShowConfiguration(Some((ssid.clone(), auth_method)))
-                            } else {
-                                Msg::None
-                            }
-                        });
-
-                        html! {
-                            <MatListItem
-                                selected=false
-                                tabindex=-1
-                                value=item.ssid.clone()
-                                graphic={GraphicType::Icon}
-                                on_request_selected=cb
-                                twoline=true
-                            >
-                                <MatIcon>{if item.auth_method == wifi::AuthMethod::None {"signal_wifi_4_bar"} else {"signal_wifi_4_bar_lock"}}</MatIcon>
-                                <span>{item.ssid.clone()}</span>
-                                <span slot="secondary">{strum::EnumMessage::get_message(&item.auth_method).unwrap()}</span>
-                            </MatListItem>
-                        }
-                    })
-                }
-                </MatList>
-            </CenteredGrid>
-            </>
-        }
-    }
-
+impl WiFiAp {
     fn view_configuration(&self) -> Html {
         // TODO validity_transform={Some(MatTextField::validity_transform(|_, _| *ValidityState::new().set_bad_input(self.fields.ssid.is_valid())))}
 
@@ -550,7 +406,7 @@ impl WiFi {
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
-                        { self.status.0.borrow().client_status_str() }
+                        { self.status.0.borrow().ap_status_str() }
                     </div>
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
@@ -569,7 +425,18 @@ impl WiFi {
                         />
                     </div>
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
-                        <span slot="trailing" onclick=self.link.callback(|_| Msg::ShowAccessPoints)><MatIconButton icon="search"/></span>
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                        <span>{"Hide SSID"}</span>
+                        <MatSwitch
+                            disabled=!self.is_loaded()
+                            onchange=self.link.callback(|state| Msg::SSIDHiddenChanged(state))
+                            checked=self.conf.0.borrow().ap_conf().map(|a| a.ssid_hidden).unwrap_or(false)
+                        />
+                    </div>
+                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
@@ -615,6 +482,28 @@ impl WiFi {
                                 </div>
                                 <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                                 </div>
+                                <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                                </div>
+                                <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
+                                    <MatTextField
+                                        outlined=true
+                                        label={
+                                            if Some(wifi::AuthMethod::WEP) == self.fields.auth_method.get_value() {
+                                                "Confirm Key"
+                                            } else {
+                                                "Confirm Password"
+                                            }
+                                        }
+                                        disabled=!self.is_loaded()
+                                        value=self.fields.password_confirmed.get_value_str().to_owned()
+                                        oninput=self.link.callback(|id: InputData| Msg::PasswordConfirmedChanged(id.value))
+                                        validate_on_initial_render=true
+                                        auto_validate=true
+                                        helper={ self.fields.password_confirmed.get_error_str() }
+                                    />
+                                </div>
+                                <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
+                                </div>
                                 </>
                             }
                         } else {
@@ -624,22 +513,10 @@ impl WiFi {
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
-                        <span>{"Use DHCP"}</span>
-                        <MatSwitch
-                            disabled=!self.is_loaded()
-                            onchange=self.link.callback(|state| Msg::DHCPChanged(state))
-                            checked=self.is_dhcp()
-                        />
-                    </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
-                    </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
-                    </div>
-                    <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
                         <MatTextField
                             outlined=true
                             label="Subnet/Gateway"
-                            disabled=!self.is_loaded() || self.is_dhcp()
+                            disabled=!self.is_loaded()
                             value=self.fields.subnet.get_value_str().to_owned()
                             oninput=self.link.callback(|id: InputData| Msg::SubnetChanged(id.value))
                             validate_on_initial_render=true
@@ -652,15 +529,11 @@ impl WiFi {
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
                     </div>
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10" style="text-align: center;">
-                        <MatTextField
-                            outlined=true
-                            label="IP"
-                            disabled=!self.is_loaded() || self.is_dhcp()
-                            value=self.fields.ip.get_value_str().to_owned()
-                            oninput=self.link.callback(|id: InputData| Msg::IpChanged(id.value))
-                            validate_on_initial_render=true
-                            auto_validate=true
-                            helper={ self.fields.ip.get_error_str() }
+                        <span>{"DHCP"}</span>
+                        <MatSwitch
+                            disabled=!self.is_loaded()
+                            onchange=self.link.callback(|state| Msg::DHCPEnabledChanged(state))
+                            checked=self.conf.0.borrow().ap_ip_conf().map(|i| i.dhcp_enabled).unwrap_or(false)
                         />
                     </div>
                     <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-1">
@@ -671,7 +544,7 @@ impl WiFi {
                         <MatTextField
                             outlined=true
                             label="DNS"
-                            disabled=!self.is_loaded() || self.is_dhcp()
+                            disabled=!self.is_loaded()
                             value=self.fields.dns.get_value_str().to_owned()
                             oninput=self.link.callback(|id: InputData| Msg::DnsChanged(id.value))
                             validate_on_initial_render=true
@@ -687,7 +560,7 @@ impl WiFi {
                         <MatTextField
                             outlined=true
                             label="Secondary DNS"
-                            disabled=!self.is_loaded() || self.is_dhcp()
+                            disabled=!self.is_loaded()
                             value=self.fields.secondary_dns.get_value_str().to_owned()
                             oninput=self.link.callback(|id: InputData| Msg::SecondaryDnsChanged(id.value))
                             validate_on_initial_render=true

@@ -1,29 +1,26 @@
-#![recursion_limit="1024"]
-
-use wasm_bindgen::prelude::*;
+#![recursion_limit = "1024"]
 
 use yew::prelude::*;
 use yew_router::prelude::*;
 
 use embedded_svc::edge_config::role::Role;
 
-use edge_frame::components::wifi;
 use edge_frame::components::frame;
+use edge_frame::components::wifi;
+use edge_frame::components::wifi_ap;
 
-use edge_frame::plugins;
+use edge_frame::plugins::ContentPlugin;
 
-use edge_frame::simple_plugins;
-use edge_frame::simple_plugins::SimplePlugin;
-
-#[derive(Debug, Switch, Copy, Clone, PartialEq)]
+#[derive(Debug, Switch, Copy, Clone, PartialEq, Eq, Hash)]
 enum Routes {
+    #[to = "/ap"]
+    AP,
     #[to = "/"]
     Root,
 }
 
 #[derive(Properties, Clone, PartialEq, Default)]
-pub struct Props {
-}
+pub struct Props {}
 
 pub struct Main;
 
@@ -36,7 +33,7 @@ impl Component for Main {
     }
 
     fn update(&mut self, _msg: Self::Message) -> ShouldRender {
-        true
+        false
     }
 
     fn change(&mut self, _props: Self::Properties) -> ShouldRender {
@@ -47,20 +44,18 @@ impl Component for Main {
     }
 
     fn view(&self) -> Html {
-        let wifi: simple_plugins::SimplePlugin<Routes> = wifi::plugin().map(
-            &|_route| Some(wifi::Routes::Root),
-            &|_route| Routes::Root);
+        let wifi = wifi::plugin().map(Routes::Root);
+        let wifi_ap = wifi_ap::plugin().map(Routes::AP);
 
-        let w2: &SimplePlugin<Routes> = &wifi;
-
-        let nav: std::vec::Vec<plugins::NavigationPlugin<Routes>> = w2.into();
+        let nav = wifi.iter().chain(wifi_ap.iter()).collect::<Vec<_>>();
+        let content = std::vec!(ContentPlugin::from(&wifi), ContentPlugin::from(&wifi_ap));
 
         html! {
             <frame::Frame<Routes>
                 active_role={Role::Admin}
                 api_endpoint={None}
                 navigation={nav}
-                content={std::vec!(w2.into())}
+                content={content}
                 />
         }
     }

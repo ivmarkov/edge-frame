@@ -8,11 +8,11 @@ use enumset::*;
 
 use js_sys::{Function, Promise};
 
-use wasm_bindgen::{JsValue, prelude::Closure};
+use wasm_bindgen::{prelude::Closure, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
-pub use embedded_svc::wifi::*;
 use crate::wasm_future::WasmFuture;
+pub use embedded_svc::wifi::*;
 
 #[derive(Clone, PartialEq)]
 pub struct Dummy;
@@ -24,7 +24,8 @@ impl Dummy {
                 web_sys::window()
                     .unwrap()
                     .set_timeout_with_callback_and_timeout_and_arguments_0(
-                        &Closure::once_into_js(move || resolve.call0(&JsValue::null()).unwrap()).into(),
+                        &Closure::once_into_js(move || resolve.call0(&JsValue::null()).unwrap())
+                            .into(),
                         duration.as_millis() as i32,
                     )
                     .unwrap();
@@ -32,7 +33,7 @@ impl Dummy {
 
             match JsFuture::from(Promise::new(cb.deref_mut())).await {
                 Ok(_) => Ok(()),
-                Err(_) => bail!("Should never happen")
+                Err(_) => bail!("Should never happen"),
             }
         })
     }
@@ -42,7 +43,7 @@ impl Dummy {
 impl WifiAsync for Dummy {
     type Error = anyhow::Error;
 
-    async fn get_capabilities(&self) -> Result<EnumSet<Capability>, Self::Error> {
+    async fn get_capabilities(&self) -> Result<EnumSet<Capability>> {
         Dummy::delay(Duration::from_millis(500)).await?;
 
         Ok((Capability::Client | Capability::AccessPoint | Capability::Mixed).into())
@@ -56,17 +57,19 @@ impl WifiAsync for Dummy {
 
     //async fn scan_n<const N: usize = 20>(&mut self) -> Result<([AccessPointInfo; N], usize)>;
 
-    async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>, Self::Error> {
+    async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>> {
         Dummy::delay(Duration::from_millis(4000)).await?;
 
-        Ok(std::vec! [
+        Ok(std::vec![
             AccessPointInfo {
                 ssid: "foo".into(),
                 bssid: [0; 6],
                 channel: 6,
                 secondary_channel: SecondaryChannel::None,
                 signal_strength: 2,
-                protocols: vec!(Protocol::P802D11BGN, Protocol::P802D11LR).drain(..).collect(),
+                protocols: vec!(Protocol::P802D11BGN, Protocol::P802D11LR)
+                    .drain(..)
+                    .collect(),
                 auth_method: AuthMethod::WPA2Personal,
             },
             AccessPointInfo {
@@ -90,7 +93,7 @@ impl WifiAsync for Dummy {
         ])
     }
 
-    async fn get_configuration(&self) -> Result<Configuration, Self::Error> {
+    async fn get_configuration(&self) -> Result<Configuration> {
         Dummy::delay(Duration::from_millis(500)).await?;
 
         Ok(Configuration::Client(ClientConfiguration {
@@ -100,7 +103,7 @@ impl WifiAsync for Dummy {
         }))
     }
 
-    async fn set_configuration(&mut self, _conf: &Configuration) -> Result<(), Self::Error> {
+    async fn set_configuration(&mut self, _conf: &Configuration) -> Result<()> {
         Dummy::delay(Duration::from_millis(500)).await?;
 
         Ok(())
@@ -126,41 +129,40 @@ impl Rest {
     }
 }
 
- #[async_trait]
+#[async_trait]
 impl WifiAsync for Rest {
     type Error = anyhow::Error;
 
-    async fn get_capabilities(&self) -> Result<EnumSet<Capability>, Self::Error> {
+    async fn get_capabilities(&self) -> Result<EnumSet<Capability>> {
         surf::get(self.with_path_segment("/caps")?)
             .recv_json()
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    async fn get_status(&self) -> Result<Status, Self::Error> {
+    async fn get_status(&self) -> Result<Status> {
         surf::get(self.with_path_segment("")?)
             .recv_json()
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>, Self::Error> {
+    async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>> {
         surf::get(self.with_path_segment("scan")?)
             .recv_json()
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    async fn get_configuration(&self) -> anyhow::Result<Configuration, Self::Error> {
+    async fn get_configuration(&self) -> anyhow::Result<Configuration> {
         surf::get(self.with_path_segment("conf")?)
             .recv_json()
             .await
             .map_err(|e| anyhow!(e))
     }
 
-    async fn set_configuration(&mut self, conf: &Configuration) -> Result<(), Self::Error> {
-        let body = surf::Body::from_json(conf)
-            .map_err(|e| anyhow!(e))?;
+    async fn set_configuration(&mut self, conf: &Configuration) -> Result<()> {
+        let body = surf::Body::from_json(conf).map_err(|e| anyhow!(e))?;
 
         surf::post(self.with_path_segment("conf")?)
             .body(body)

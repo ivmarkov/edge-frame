@@ -1,12 +1,13 @@
 use std::borrow::Cow;
+use std::fmt::Debug;
 use std::vec;
 
 use yew::prelude::*;
+use yew_router::prelude::Switch as Routed;
 use yew_router::prelude::*;
-use yew_router::prelude::Switch as Routable;
 
-use material_yew::*;
 use material_yew::top_app_bar_fixed::*;
+use material_yew::*;
 
 use embedded_svc::edge_config::role::Role;
 
@@ -14,7 +15,10 @@ use crate::lambda;
 use crate::plugins::*;
 
 #[derive(Properties, Clone, PartialEq)]
-pub struct Props<R: Routable + Clone> {
+pub struct Props<R>
+where
+    R: Routed + PartialEq + Clone,
+{
     #[prop_or_default]
     pub app_title: Cow<'static, str>,
 
@@ -31,7 +35,10 @@ pub struct Props<R: Routable + Clone> {
     pub api_endpoint: Option<APIEndpoint>,
 }
 
-impl<R: Routable + Clone> std::default::Default for Props<R> {
+impl<R> Default for Props<R>
+where
+    R: Routed + PartialEq + Clone,
+{
     fn default() -> Self {
         Props {
             app_title: "".into(),
@@ -43,7 +50,10 @@ impl<R: Routable + Clone> std::default::Default for Props<R> {
     }
 }
 
-pub struct Frame<R: 'static + Routable + Clone + Copy + PartialEq> {
+pub struct Frame<R>
+where
+    R: Routed + PartialEq + Clone + Copy + Debug + 'static,
+{
     link: ComponentLink<Self>,
     drawer_open: bool,
     props: Props<R>,
@@ -55,22 +65,25 @@ pub enum Msg {
     Closed,
 }
 
-impl<R: 'static + Routable + Clone + Copy + PartialEq> Frame<R> {
-    fn view(props: &Props<R>, drawer_open: bool, link: &ComponentLink<Self>, routable: Option<R>) -> Html {
-        let normal = Self::get_nav_plugins(
-            props,
-            |nav| nav.insertion_point == InsertionPoint::Drawer && nav.category != Category::Settings);
+impl<R> Frame<R>
+where
+    R: Routed + PartialEq + Clone + Copy + Debug + 'static,
+{
+    fn view(props: &Props<R>, drawer_open: bool, link: &ComponentLink<Self>, routed: R) -> Html {
+        let normal = Self::get_nav_plugins(props, |nav| {
+            nav.insertion_point == InsertionPoint::Drawer && nav.category != Category::Settings
+        });
 
-        let settings = Self::get_nav_plugins(
-            props,
-            |nav| nav.insertion_point == InsertionPoint::Drawer && nav.category == Category::Settings);
+        let settings = Self::get_nav_plugins(props, |nav| {
+            nav.insertion_point == InsertionPoint::Drawer && nav.category == Category::Settings
+        });
 
         if normal.is_empty() && settings.is_empty() {
             return html! {
                 <>
-                    { Self::view_content(props, link, routable.clone()) }
+                    { Self::view_content(props, link, routed.clone()) }
                 </>
-            }
+            };
         }
 
         html! {
@@ -87,25 +100,30 @@ impl<R: 'static + Routable + Clone + Copy + PartialEq> Frame<R> {
                     </drawer::MatDrawerHeader>
 
                     <MatList>
-                        { Self::view_drawer_plugins(props, Option::None, normal, routable) }
-                        { Self::view_drawer_plugins(props, Option::Some("Settings"), settings, routable) }
+                        { Self::view_drawer_plugins(props, Option::None, normal, routed) }
+                        { Self::view_drawer_plugins(props, Option::Some("Settings"), settings, routed) }
                     </MatList>
                 </div>
 
                 <drawer::MatDrawerAppContent>
                     <div class="app-content">
-                        { Self::view_content(props, link, routable.clone()) }
+                        { Self::view_content(props, link, routed.clone()) }
                     </div>
                 </drawer::MatDrawerAppContent>
             </MatDrawer>
         }
     }
 
-    fn view_drawer_plugins(props: &Props<R>, title: Option<&str>, plugins: vec::Vec<lambda::Lambda<PluginProps<R>, Html>>, routable: Option<R>) -> Html {
+    fn view_drawer_plugins(
+        props: &Props<R>,
+        title: Option<&str>,
+        plugins: vec::Vec<lambda::Lambda<PluginProps<R>, Html>>,
+        routed: R,
+    ) -> Html {
         if !plugins.is_empty() {
             let list = html! {
                 <MatList activatable=true>
-                    { Self::view_plugins(props, None, plugins, routable) }
+                    { Self::view_plugins(props, None, plugins, routed) }
                 </MatList>
             };
 
@@ -124,12 +142,12 @@ impl<R: 'static + Routable + Clone + Copy + PartialEq> Frame<R> {
         }
     }
 
-    fn view_app_bar(props: &Props<R>, link: &ComponentLink<Self>, routable: Option<R>) -> Html {
-        let plugins = Self::get_nav_plugins(
-            props,
-            |nav| nav.insertion_point == InsertionPoint::Appbar);
+    fn view_app_bar(props: &Props<R>, link: &ComponentLink<Self>, routed: R) -> Html {
+        let plugins =
+            Self::get_nav_plugins(props, |nav| nav.insertion_point == InsertionPoint::Appbar);
 
-        let has_drawer_plugins = props.navigation
+        let has_drawer_plugins = props
+            .navigation
             .iter()
             .any(|nav| nav.insertion_point == InsertionPoint::Drawer);
 
@@ -152,7 +170,7 @@ impl<R: 'static + Routable + Clone + Copy + PartialEq> Frame<R> {
                         {"Sat 16:11"}
                     </span>
 
-                    { Self::view_plugins(props, None, plugins, routable) }
+                    { Self::view_plugins(props, None, plugins, routed) }
 
                     <MatIconButton icon="power_settings_new"/>
                 </MatTopAppBarActionItems>
@@ -160,25 +178,31 @@ impl<R: 'static + Routable + Clone + Copy + PartialEq> Frame<R> {
         }
     }
 
-    fn view_content(props: &Props<R>, link: &ComponentLink<Self>, routable: Option<R>) -> Html {
-        let plugins =
-            props.content
-                .iter()
-                .map(|cnt| cnt.component.clone())
-                .collect();
+    fn view_content(props: &Props<R>, link: &ComponentLink<Self>, routed: R) -> Html {
+        let plugins = props
+            .content
+            .iter()
+            .map(|cnt| cnt.component.clone())
+            .collect();
 
-        html! {
-            <div style={"height: 100%; padding: 1rem;"}>
-                { Self::view_plugins(props, Some(Self::get_app_bar_renderer(props, link, routable)), plugins, routable) }
-            </div>
-        }
+        Self::view_plugins(
+            props,
+            Some(Self::get_app_bar_renderer(props, link, routed)),
+            plugins,
+            routed,
+        )
     }
 
-    fn view_plugins(props: &Props<R>, app_bar_renderer: Option<lambda::Lambda<(), Html>>, plugins: vec::Vec<lambda::Lambda<PluginProps<R>, Html>>, routable: Option<R>) -> Html {
+    fn view_plugins(
+        props: &Props<R>,
+        app_bar_renderer: Option<lambda::Lambda<(), Html>>,
+        plugins: vec::Vec<lambda::Lambda<PluginProps<R>, Html>>,
+        routed: R,
+    ) -> Html {
         html! {
             for plugins.iter().map(|component|
                 component.call(PluginProps {
-                    active_route: routable,
+                    active_route: routed,
                     active_role: props.active_role,
                     api_endpoint: props.api_endpoint.clone(),
                     app_bar_renderer: app_bar_renderer.clone(),
@@ -186,15 +210,23 @@ impl<R: 'static + Routable + Clone + Copy + PartialEq> Frame<R> {
         }
     }
 
-    fn get_app_bar_renderer(props: &Props<R>, link: &ComponentLink<Self>, routable: Option<R>) -> lambda::Lambda<(), Html> {
+    fn get_app_bar_renderer(
+        props: &Props<R>,
+        link: &ComponentLink<Self>,
+        routed: R,
+    ) -> lambda::Lambda<(), Html> {
         let props = props.clone();
         let link = link.clone();
 
-        lambda::Lambda::from(move |_| Self::view_app_bar(&props, &link, routable))
+        lambda::Lambda::from(move |_| Self::view_app_bar(&props, &link, routed))
     }
 
-    fn get_nav_plugins<F: Fn(&NavigationPlugin<R>) -> bool>(props: &Props<R>, criteria: F) -> vec::Vec<lambda::Lambda<PluginProps<R>, Html>> {
-        props.navigation
+    fn get_nav_plugins<F: Fn(&NavigationPlugin<R>) -> bool>(
+        props: &Props<R>,
+        criteria: F,
+    ) -> vec::Vec<lambda::Lambda<PluginProps<R>, Html>> {
+        props
+            .navigation
             .iter()
             .filter(|nav| criteria(&nav))
             .map(|nav| nav.component.clone())
@@ -202,7 +234,10 @@ impl<R: 'static + Routable + Clone + Copy + PartialEq> Frame<R> {
     }
 }
 
-impl<R: 'static + Routable + Clone + Copy + PartialEq> Component for Frame<R> {
+impl<R> Component for Frame<R>
+where
+    R: Routed + PartialEq + Clone + Copy + Debug + 'static,
+{
     type Message = Msg;
     type Properties = Props<R>;
 
@@ -237,9 +272,8 @@ impl<R: 'static + Routable + Clone + Copy + PartialEq> Component for Frame<R> {
         let link = self.link.clone();
 
         html! {
-            <Router<R, ()>
-                render = Router::render(move |routable: R|
-                    Self::view(&props, drawer_open, &link, Some(routable.clone())))
+            <Router<R>
+                render = Router::render(move |routed: R| Self::view(&props, drawer_open, &link, routed.clone()))
             />
         }
     }

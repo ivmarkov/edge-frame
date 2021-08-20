@@ -5,3 +5,4 @@ pub mod router_icon_button;
 pub mod router_list_item;
 
 pub mod wifi;
+pub mod wifi_ap;
