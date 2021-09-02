@@ -7,14 +7,11 @@ use embedded_svc::edge_config::role::Role;
 
 use edge_frame::components::frame;
 use edge_frame::components::wifi;
-use edge_frame::components::wifi_ap;
 
 use edge_frame::plugins::ContentPlugin;
 
 #[derive(Debug, Switch, Copy, Clone, PartialEq, Eq, Hash)]
 enum Routes {
-    #[to = "/ap"]
-    AP,
     #[to = "/"]
     Root,
 }
@@ -44,11 +41,10 @@ impl Component for Main {
     }
 
     fn view(&self) -> Html {
-        let wifi = wifi::plugin().map(Routes::Root);
-        let wifi_ap = wifi_ap::plugin().map(Routes::AP);
+        let wifi = wifi::plugin(wifi::PluginBehavior::Mixed).map(Routes::Root);
 
-        let nav = wifi.iter().chain(wifi_ap.iter()).collect::<Vec<_>>();
-        let content = std::vec!(ContentPlugin::from(&wifi), ContentPlugin::from(&wifi_ap));
+        let nav = wifi.iter().collect::<Vec<_>>();
+        let content = std::vec![ContentPlugin::from(&wifi)];
 
         html! {
             <frame::Frame<Routes>

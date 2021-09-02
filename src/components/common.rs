@@ -1,4 +1,4 @@
-use std::{cell::RefCell, mem, rc::Rc, str::FromStr};
+use std::{cell::RefCell, iter::once, mem, rc::Rc, str::FromStr};
 
 use anyhow::*;
 
@@ -371,6 +371,235 @@ impl Component for CenteredGrid {
                     </div>
                 </div>
             </div>
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Align {
+    Left,
+    Right,
+    Center,
+}
+
+impl Default for Align {
+    fn default() -> Self {
+        Self::Center
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VAlign {
+    Top,
+    Middle,
+    Bottom,
+    Stretch,
+}
+
+impl Default for VAlign {
+    fn default() -> Self {
+        Self::Stretch
+    }
+}
+
+#[derive(Properties, Clone, PartialEq, Debug)]
+pub struct GridProps {
+    #[prop_or_default]
+    pub inner: bool,
+
+    #[prop_or_default]
+    pub align: Align,
+
+    #[prop_or_default]
+    pub children: Children,
+}
+
+#[derive(Debug)]
+pub struct Grid {
+    props: GridProps,
+}
+
+pub enum GridMsg {}
+
+impl Component for Grid {
+    type Message = GridMsg;
+    type Properties = GridProps;
+
+    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+        Grid { props }
+    }
+
+    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
+        false
+    }
+
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        self.props = props;
+        true
+    }
+
+    fn view(&self) -> Html {
+        let grid = html! {
+            <div class="mdc-layout-grid__inner">
+                { self.props.children.clone() }
+            </div>
+        };
+
+        if !self.props.inner {
+            let classes = classes!(
+                "mdc-layout-grid",
+                match self.props.align {
+                    Align::Left => Some("left"),
+                    Align::Right => Some("right"),
+                    Align::Center => None,
+                }
+                .map(|align| format!("mdc-layout-grid--align-{}", align))
+            );
+
+            html! {
+                <div class=classes>
+                    { grid }
+                </div>
+            }
+        } else {
+            grid
+        }
+    }
+}
+
+#[derive(Properties, Clone, PartialEq, Debug)]
+pub struct CellProps {
+    #[prop_or_default]
+    pub valign: VAlign,
+
+    #[prop_or_default]
+    pub order: Option<u32>,
+
+    #[prop_or_default]
+    pub span: Option<u32>,
+
+    #[prop_or_default]
+    pub span_desktop: Option<u32>,
+
+    #[prop_or_default]
+    pub span_tablet: Option<u32>,
+
+    #[prop_or_default]
+    pub span_phone: Option<u32>,
+
+    #[prop_or_default]
+    pub style: String,
+
+    #[prop_or_default]
+    pub children: Children,
+}
+
+pub enum CellMsg {}
+
+#[derive(Debug)]
+pub struct Cell {
+    props: CellProps,
+}
+
+impl Component for Cell {
+    type Message = CellMsg;
+    type Properties = CellProps;
+
+    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+        Cell { props }
+    }
+
+    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
+        false
+    }
+
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        self.props = props;
+        true
+    }
+
+    fn view(&self) -> Html {
+        let classes = once("mdc-layout-grid__cell".into())
+            .chain(
+                [
+                    ("", self.props.span),
+                    ("-desktop", self.props.span_desktop),
+                    ("-tablet", self.props.span_tablet),
+                    ("-phone", self.props.span_phone),
+                ]
+                .iter()
+                .filter_map(|(prefix, value)| {
+                    value.map(|span| format!("mdc-layout-grid__cell--span-{}{}", span, prefix))
+                }),
+            )
+            .chain(
+                match self.props.valign {
+                    VAlign::Top => Some("top"),
+                    VAlign::Middle => Some("middle"),
+                    VAlign::Bottom => Some("bottom"),
+                    VAlign::Stretch => None,
+                }
+                .map(|valign| format!("mdc-layout-grid__cell--align-{}", valign))
+                .into_iter(),
+            )
+            .chain(
+                self.props
+                    .order
+                    .map(|order| format!("mdc-layout-grid__cell--order-{}", order))
+                    .into_iter(),
+            )
+            .collect::<Vec<_>>();
+
+        html! {
+            <div class=classes!(classes) style=self.props.style.clone()>
+                { self.props.children.clone() }
+            </div>
+        }
+    }
+}
+
+#[derive(Properties, Clone, PartialEq, Debug)]
+pub struct ChunkProps {
+    #[prop_or(true)]
+    pub visible: bool,
+
+    #[prop_or_default]
+    pub children: Children,
+}
+
+pub enum ChunkMsg {}
+
+#[derive(Debug)]
+pub struct Chunk {
+    props: ChunkProps,
+}
+
+impl Component for Chunk {
+    type Message = ChunkMsg;
+    type Properties = ChunkProps;
+
+    fn create(props: Self::Properties, _link: ComponentLink<Self>) -> Self {
+        Chunk { props }
+    }
+
+    fn update(&mut self, _msg: Self::Message) -> ShouldRender {
+        false
+    }
+
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        self.props = props;
+        true
+    }
+
+    fn view(&self) -> Html {
+        if self.props.visible {
+            html! {
+                <>
+                { self.props.children.clone() }
+                </>
+            }
+        } else {
+            html! {}
         }
     }
 }
