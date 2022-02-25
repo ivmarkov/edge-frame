@@ -33,17 +33,18 @@ async-trait = "*"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-yew = { version = "0.18", default-features = false, features = ["web_sys"] }
-yew-router = "0.15"
-yewtil = "0.4"
-material-yew = { version = "0.1", features = ["full"] }
+yew = { version = "0.19", default-features = false }
+yew-router = { version = "0.16" }
 surf = {version = "*", default-features = false, features = ["wasm-client"]}
 serde_json = "1"
 serde = "1"
 url = "2"
 strum = {version = "0.21"}
 getrandom = {version = "0.2", features = ["js"]}
-embedded-svc = "0.8"
+embedded-svc = { version = "0.17.3", features = ["experimental"] }
+futures = "0.3"
+log = "0.4"
+wasm-logger = "0.2"
 
 # `wee_alloc` is a tiny allocator for wasm that is only ~1K in code size
 # compared to the default allocator's ~10K. However, it is slower than the default
@@ -66,6 +67,5 @@ console_error_panic_hook = "0.1"
 # These crates are used for running unit tests.
 [dev-dependencies]
 wasm-bindgen-test = "0.2"
-futures = "0.1"
 js-sys = "0.3"
 wasm-bindgen-futures = "0.3"

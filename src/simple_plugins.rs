@@ -3,7 +3,7 @@ use enumset::*;
 use yew::prelude::*;
 use yew_router::prelude::Switch as Routed;
 
-use embedded_svc::edge_config::role::Role;
+use embedded_svc::utils::rest::role::Role;
 
 use crate::components::router_icon_button::*;
 use crate::components::router_list_item::*;

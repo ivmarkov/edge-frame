@@ -4,6 +4,8 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
+use yew::html::ImplicitClone;
+
 /// Universal closure wrapper.
 /// <aside class="warning">
 /// Use closure adapters carefully, because if you call one from the `update` loop
@@ -109,6 +111,8 @@ impl<IN: 'static, OUT: 'static> Lambda<IN, OUT> {
         Lambda::from(func)
     }
 }
+
+impl<IN, OUT> ImplicitClone for Lambda<IN, OUT> {}
 
 // #[cfg(test)]
 // pub(crate) mod test_util {

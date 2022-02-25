@@ -1,10 +1,12 @@
 use std::{cell::RefCell, iter::once, mem, rc::Rc, str::FromStr};
 
-use anyhow::*;
+//use anyhow::*;
 
 use strum::{EnumMessage, IntoEnumIterator};
 
 use yew::prelude::*;
+
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Copy, Clone)]
 pub struct Optional<T>(pub Option<T>);
@@ -30,7 +32,7 @@ impl<T> From<Optional<T>> for Option<T> {
 impl<T: FromStr> FromStr for Optional<T> {
     type Err = T::Err;
 
-    fn from_str(mut s: &str) -> Result<Self, Self::Err> {
+    fn from_str(mut s: &str) -> std::result::Result<Self, Self::Err> {
         s = s.trim();
 
         if s.len() == 0 {

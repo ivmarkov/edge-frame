@@ -5,7 +5,7 @@ use enumset::*;
 use yew::prelude::Html;
 use yew::prelude::Properties;
 
-use embedded_svc::edge_config::role::Role;
+use embedded_svc::utils::rest::role::Role;
 
 use crate::lambda::Lambda;
 
