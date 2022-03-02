@@ -1173,15 +1173,36 @@ pub struct WifiProps {
 #[function_component(Wifi1)]
 pub fn wifi1(props: &WifiProps) -> Html {
     let status_state = use_state_eq(|| None);
-    let conf_state = use_state_eq(|| None);
+    let conf_state: UseStateHandle<Option<Configuration>> = use_state_eq(|| None);
     let conf_state_dirty = use_state_eq(|| false);
     let conf_state_errors = use_state_eq(|| (false, false));
 
     let api = props.wifi_endpoint.clone();
 
-    let ap_conf_form = ApConfForm::new(Callback::from(|conf| {
-        info!("GOT CONF: !!!!! {:?}", conf);
-    }));
+    let ap_changed = {
+        let conf_state = conf_state.clone();
+        let conf_state_dirty = conf_state_dirty.clone();
+        let conf_state_errors = conf_state_errors.clone();
+
+        Callback::from(move |ap_conf_opt| {
+            info!("GOT CONF: !!!!! {:?}", ap_conf_opt);
+
+            if let Some(ap_conf) = ap_conf_opt {
+                if let Some(mut conf) = (*conf_state).clone() {
+                    info!("Setting AP dirty {:?}", ap_conf);
+
+                    *conf.as_ap_conf_mut() = ap_conf;
+                    conf_state.set(Some(conf));
+
+                    conf_state_dirty.set(true);
+                }
+            } else {
+                conf_state_dirty.set(false);
+            }
+        })
+    };
+
+    let ap_conf_form = ApConfForm::new(ap_changed);
 
     {
         let api = api.clone();
@@ -1229,24 +1250,6 @@ pub fn wifi1(props: &WifiProps) -> Html {
             (),
         );
     }
-
-    let ap_changed = {
-        let conf_state = conf_state.clone();
-        let conf_state_dirty = conf_state_dirty.clone();
-        let conf_state_errors = conf_state_errors.clone();
-
-        Callback::from(move |(ap_conf, errors): (AccessPointConfiguration, bool)| {
-            if let Some(mut conf) = (*conf_state).clone() {
-                info!("Setting AP dirty {:?}, {}", ap_conf, errors);
-
-                *conf.as_ap_conf_mut() = ap_conf;
-                conf_state.set(Some(conf));
-
-                conf_state_dirty.set(true);
-                conf_state_errors.set((errors, conf_state_errors.1));
-            }
-        })
-    };
 
     let sta_changed = {
         let conf_state = conf_state.clone();
@@ -1345,16 +1348,12 @@ impl ApConfForm {
             move |_| shared_cb.borrow().emit(())
         }
 
-        let password = Field::text(Ok, changed(shared_cb.clone()));
-
-        let dns = TextField::<Option<Ipv4Addr>>::text(
-            |raw_value| {
-                if raw_value.trim().is_empty() {
-                    Ok(None)
+        let password = Field::text(
+            |password| {
+                if password.is_empty() {
+                    Err("Password cannot be empty".into())
                 } else {
-                    Ipv4Addr::from_str(&raw_value).map(Some).map_err(|_| {
-                        "Invalid IP address format, expected XXX.XXX.XXX.XXX".to_owned()
-                    })
+                    Ok(password)
                 }
             },
             changed(shared_cb.clone()),
@@ -1388,8 +1387,30 @@ impl ApConfForm {
                 |raw_text| Subnet::from_str(&raw_text).map_err(str::to_owned),
                 changed(shared_cb.clone()),
             ),
-            dns: dns.clone(),
-            secondary_dns: dns,
+            dns: TextField::<Option<Ipv4Addr>>::text(
+                |raw_value| {
+                    if raw_value.trim().is_empty() {
+                        Ok(None)
+                    } else {
+                        Ipv4Addr::from_str(&raw_value).map(Some).map_err(|_| {
+                            "Invalid IP address format, expected XXX.XXX.XXX.XXX".to_owned()
+                        })
+                    }
+                },
+                changed(shared_cb.clone()),
+            ),
+            secondary_dns: TextField::<Option<Ipv4Addr>>::text(
+                |raw_value| {
+                    if raw_value.trim().is_empty() {
+                        Ok(None)
+                    } else {
+                        Ipv4Addr::from_str(&raw_value).map(Some).map_err(|_| {
+                            "Invalid IP address format, expected XXX.XXX.XXX.XXX".to_owned()
+                        })
+                    }
+                },
+                changed(shared_cb.clone()),
+            ),
         };
 
         *shared_cb.borrow_mut() = {
@@ -1431,7 +1452,16 @@ impl ApConfForm {
     }
 
     fn get(&self) -> Option<AccessPointConfiguration> {
-        let errors = self.ssid.has_errors();
+        let errors = self.ssid.has_errors()
+            || self.hidden_ssid.has_errors()
+            || self.auth.has_errors()
+            || self.password.has_errors()
+            || self.password_confirm.has_errors()
+            || self.ip_conf_enabled.has_errors()
+            || self.dhcp_server_enabled.has_errors()
+            || self.subnet.has_errors()
+            || self.dns.has_errors()
+            || self.secondary_dns.has_errors();
 
         if errors {
             None

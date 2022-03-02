@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use web_sys::Event;
 use yew::{use_state, Callback, UseStateHandle};
 
@@ -7,7 +9,8 @@ use super::util::*;
 
 #[derive(Clone)]
 pub struct Field<R, S> {
-    value: UseStateHandle<R>,
+    value_state: UseStateHandle<R>,
+    raw_value: Rc<RefCell<Option<R>>>,
     conv: Lambda<Event, R>,
     validate: Lambda<R, Result<S, String>>,
     changed: Callback<Result<S, String>>,
@@ -51,7 +54,8 @@ where
         changed: impl Fn(Result<S, String>) + 'static,
     ) -> Self {
         Self {
-            value: use_state(|| Default::default()),
+            value_state: use_state(|| Default::default()),
+            raw_value: Rc::new(RefCell::new(None)),
             conv: Lambda::from(conv),
             validate: Lambda::from(validate),
             changed: Callback::from(changed),
@@ -59,15 +63,19 @@ where
     }
 
     pub fn reset(&self, raw_value: R) {
-        self.value.set(raw_value);
+        *self.raw_value.borrow_mut() = Some(raw_value.clone());
+        self.value_state.set(raw_value);
     }
 
     pub fn value(&self) -> Option<S> {
-        self.validate.call((&*self.value).clone()).ok()
+        self.validate.call(self.raw_value()).ok()
     }
 
     pub fn raw_value(&self) -> R {
-        (&*self.value).clone()
+        self.raw_value
+            .borrow()
+            .clone()
+            .unwrap_or((&*self.value_state).clone())
     }
 
     pub fn has_errors(&self) -> bool {
@@ -75,7 +83,7 @@ where
     }
 
     pub fn error(&self) -> Option<String> {
-        match self.validate.call((&*self.value).clone()) {
+        match self.validate.call(self.raw_value()) {
             Ok(_) => None,
             Err(error) => Some(error),
         }
@@ -99,8 +107,7 @@ where
     }
 
     fn update(&self, value: R) {
-        self.value.set(value);
-        self.changed
-            .emit(self.validate.call((&*self.value).clone()));
+        self.reset(value);
+        self.changed.emit(self.validate.call(self.raw_value()));
     }
 }
