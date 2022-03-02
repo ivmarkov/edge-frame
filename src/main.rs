@@ -5,7 +5,7 @@ use yew_router::prelude::*;
 
 use embedded_svc::utils::rest::role::Role;
 
-use edge_frame::{components::wifi::Wifi1, api::wifi::WifiAsync};
+use edge_frame::{api::wifi::WifiAsync, components::wifi::Wifi1};
 
 #[derive(Debug, Routable, Copy, Clone, PartialEq, Eq, Hash)]
 enum Routes {
@@ -16,7 +16,7 @@ enum Routes {
 #[function_component(App)]
 fn app() -> Html {
     wasm_logger::init(wasm_logger::Config::default());
-    
+
     // let wifi = wifi::plugin(wifi::PluginBehavior::Mixed).map(Routes::Root);
 
     // let nav = wifi.iter().collect::<Vec<_>>();
@@ -29,7 +29,7 @@ fn app() -> Html {
     //         navigation={nav}
     //         content={content}
     //         />
-    // }    
+    // }
 
     html! {
         <Wifi1 wifi_endpoint={WifiAsync}/>

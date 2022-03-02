@@ -1,9 +1,13 @@
+use embedded_svc::ipv4::{RouterConfiguration, Subnet};
 use std::collections::HashMap;
 use std::{cell::RefCell, convert::TryFrom, net::Ipv4Addr, rc::Rc, str::FromStr, vec};
+use strum::{EnumMessage, IntoEnumIterator};
 
 use enumset::EnumSet;
 
-use embedded_svc::wifi::{self, Status};
+use embedded_svc::wifi::{
+    self, AccessPointConfiguration, ClientConfiguration, Configuration, Status,
+};
 use embedded_svc::{
     ipv4,
     wifi::{AuthMethod, TransitionalState},
@@ -20,13 +24,12 @@ use embedded_svc::utils::rest::role::Role;
 use lambda::Lambda;
 
 use crate::api::wifi::WifiAsync;
-use crate::{
-    lambda,
-    //plugins::{Category, InsertionPoint},
-    //simple_plugins::SimplePlugin,
-};
+use crate::lambda;
 
 use crate::api;
+
+use super::field::*;
+
 //use crate::plugins::*;
 
 //use super::common::*;
@@ -1154,91 +1157,10 @@ use crate::api;
 //     }
 // }
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct APIEndpoint {
     pub uri: String,
     pub headers: HashMap<String, String>,
-}
-
-
-
-
-
-
-
-
-
-#[derive(Properties, Clone, Debug, PartialEq)]
-pub struct ApConfProps {
-    #[prop_or_default]
-    pub conf: Option<wifi::AccessPointConfiguration>,
-    #[prop_or_default]
-    pub disabled: bool,
-    pub changed: Callback<wifi::AccessPointConfiguration>,
-}
-
-struct Field<R, V, C> {
-    raw_state: UseStateHandle<R>,
-    validate: V,
-    changed: C,
-}
-
-impl<S, V, C> Field<String, V, C>
-where
-    V: Fn(&String) -> Result<S, String>,
-    C: Fn(S),
-{
-    pub fn new(raw_value: Option<String>, validate: V, changed: C) -> Self {
-        let this = Self {
-            raw_state: use_state(|| "".into()),
-            validate,
-            changed,
-        };
-
-        if let Some(raw_value) = raw_value {
-            this.raw_state.set(raw_value);
-        }
-
-        this
-    }
-
-    pub fn raw_value(&self) -> String {
-        (*self.raw_state).clone()
-    }
-
-    pub fn is_valid(&self) -> bool {
-        (self.validate)(&*self.raw_state).is_ok()
-    }
-
-    pub fn value(&self) -> Option<S> {
-        (self.validate)(&*self.raw_state).ok()
-    }
-
-    pub fn error(&self) -> Option<String> {
-        match (self.validate)(&*self.raw_state) {
-            Ok(_) => None,
-            Err(error) => Some(error),
-        }
-    }
-
-    pub fn on_change(&self, event: &Event) {
-        self.update(Self::target_input_value(event));
-    }
-
-    fn update(&self, raw_value: String) {
-        let value = (self.validate)(&*self.raw_state).ok();
-        self.raw_state.set(raw_value);
-
-        if let Some(value) = value {
-            (self.changed)(value);
-        }
-    }
-
-    fn target_input_value(e: &Event) -> String {
-        let input: HtmlInputElement = e.target_unchecked_into();
-        input.value()
-    }
 }
 
 #[derive(Properties, Clone, Debug, PartialEq)]
@@ -1250,106 +1172,295 @@ pub struct WifiProps {
 
 #[function_component(Wifi1)]
 pub fn wifi1(props: &WifiProps) -> Html {
-    let status_state: UseStateHandle<Option<Status>> = use_state(|| None);
-    let conf_state = use_state(|| None);
-    let conf_state_dirty = use_state(|| false);
-    
-    let api = props.wifi_endpoint.clone();
-
-    let api2 = api.clone();
-    let conf_state2 = conf_state.clone();
-    let status_state2 = status_state.clone();
-    let conf_state_dirty2 = conf_state_dirty.clone();
-
-    use_effect(|| {
-        wasm_bindgen_futures::spawn_local(async move {
-            loop {
-                info!("About to load conf or status");
-
-                let status = api2.get_status();
-                let conf = api2.get_configuration();
-
-                pin_mut!(status, conf);
-                
-                match select(conf, status).await {
-                    Either::Left((conf, _)) => { info!("Got conf {:?}", conf); conf_state2.set(Some(conf.unwrap())); conf_state_dirty2.set(false); },
-                    Either::Right((status, _)) => { info!("Got status {:?}", status); status_state2.set(Some(status.unwrap())) },
-                }
-            }
-        });
-
-        || ()
-    });
-
-    let conf_state_changed = conf_state.clone();
-    let conf_state_dirty_changed = conf_state_dirty.clone();
-
-    let changed = Callback::from(move |ap_conf| {
-        if let Some(mut conf) = (*conf_state_changed).clone() {
-            *conf.as_ap_conf_mut() = ap_conf;
-            conf_state_changed.set(Some(conf));
-
-            conf_state_dirty_changed.set(true);
-        }
-    });
+    let status_state = use_state_eq(|| None);
+    let conf_state = use_state_eq(|| None);
+    let conf_state_dirty = use_state_eq(|| false);
+    let conf_state_errors = use_state_eq(|| (false, false));
 
     let api = props.wifi_endpoint.clone();
-    let conf_state3 = conf_state.clone();
-    let conf_state_dirty3 = conf_state_dirty.clone();
 
-    let onclick = Callback::from(move |_| {
-        let conf_state_dirty_onclick = conf_state_dirty3.clone();
-        let conf_state_onclick = conf_state3.clone();
-        let mut api_onclick = api.clone();
+    let ap_conf_form = ApConfForm::new(Callback::from(|conf| {
+        info!("GOT CONF: !!!!! {:?}", conf);
+    }));
 
-        wasm_bindgen_futures::spawn_local(async move {
-            if *conf_state_dirty_onclick {
-                conf_state_dirty_onclick.set(false);
+    {
+        let api = api.clone();
+        let status_state = status_state.clone();
 
-                if let Some(conf) = &*conf_state_onclick {
-                    api_onclick.set_configuration(conf).await.unwrap();
-                }
+        use_effect_with_deps(
+            |_| {
+                wasm_bindgen_futures::spawn_local(async move {
+                    loop {
+                        let status = api.get_status().await.unwrap();
+                        info!("Got status {:?}", status);
+
+                        status_state.set(Some(status));
+                    }
+                });
+
+                || ()
+            },
+            (),
+        );
+    }
+
+    {
+        let api = api.clone();
+        let ap_conf_form = ap_conf_form.clone();
+        let conf_state = conf_state.clone();
+        let conf_state_dirty = conf_state_dirty.clone();
+
+        use_effect_with_deps(
+            |_| {
+                wasm_bindgen_futures::spawn_local(async move {
+                    //loop {
+                    let conf = api.get_configuration().await.unwrap();
+                    info!("Got conf {:?}", conf);
+
+                    if conf_state.as_ref() != Some(&conf) && !*conf_state_dirty {
+                        ap_conf_form.reset(conf.as_ap_conf_ref().unwrap_or(&Default::default()));
+                        conf_state.set(Some(conf));
+                    }
+                    //}
+                });
+
+                || ()
+            },
+            (),
+        );
+    }
+
+    let ap_changed = {
+        let conf_state = conf_state.clone();
+        let conf_state_dirty = conf_state_dirty.clone();
+        let conf_state_errors = conf_state_errors.clone();
+
+        Callback::from(move |(ap_conf, errors): (AccessPointConfiguration, bool)| {
+            if let Some(mut conf) = (*conf_state).clone() {
+                info!("Setting AP dirty {:?}, {}", ap_conf, errors);
+
+                *conf.as_ap_conf_mut() = ap_conf;
+                conf_state.set(Some(conf));
+
+                conf_state_dirty.set(true);
+                conf_state_errors.set((errors, conf_state_errors.1));
             }
-        });
-    });
+        })
+    };
+
+    let sta_changed = {
+        let conf_state = conf_state.clone();
+        let conf_state_dirty = conf_state_dirty.clone();
+        let conf_state_errors = conf_state_errors.clone();
+
+        Callback::from(move |(sta_conf, errors): (ClientConfiguration, bool)| {
+            if let Some(mut conf) = (*conf_state).clone() {
+                info!("Setting STA dirty {:?}, {}", sta_conf, errors);
+
+                *conf.as_client_conf_mut() = sta_conf;
+                conf_state.set(Some(conf));
+
+                conf_state_dirty.set(true);
+                conf_state_errors.set((conf_state_errors.0, errors));
+            }
+        })
+    };
+
+    let onclick = {
+        let api = api.clone();
+        let conf_state = conf_state.clone();
+        let conf_state_dirty = conf_state_dirty.clone();
+        let ap_conf_form = ap_conf_form.clone();
+
+        Callback::from(move |_| {
+            if let Some(conf) = &*conf_state {
+                ap_conf_form.reset(conf.as_ap_conf_ref().unwrap_or(&Default::default()));
+            }
+
+            let mut api = api.clone();
+            let conf_state = conf_state.clone();
+            let conf_state_dirty = conf_state_dirty.clone();
+
+            wasm_bindgen_futures::spawn_local(async move {
+                if *conf_state_dirty {
+                    conf_state_dirty.set(false);
+
+                    if let Some(conf) = &*conf_state {
+                        api.set_configuration(conf).await.unwrap();
+                    }
+                }
+            });
+        })
+    };
 
     html! {
         <>
-            <ApConf
-                conf={conf_state.as_ref().and_then(|conf| conf.as_ap_conf_ref().cloned())}
-                disabled={conf_state.is_none()}
-                {changed}
-            />
-            <input 
-                type="button" 
-                class={classes!("button", "my-4", format!("{}", if *conf_state_dirty {"is-disabled"} else {""}))}
+            {
+                ap_conf(
+                    &ap_conf_form,
+                    conf_state.is_none(),
+                )
+            }
+
+            {
+                sta_conf(
+                    conf_state.as_ref().and_then(|conf| conf.as_client_conf_ref()).unwrap_or(&Default::default()),
+                    sta_changed,
+                    conf_state.is_none(),
+                )
+            }
+
+            <input
+                type="button"
+                class={"button my-4"}
                 value="Save"
+                disabled={!*conf_state_dirty}
                 {onclick}
             />
         </>
     }
 }
 
-#[function_component(ApConf)]
-fn ap_conf(props: &ApConfProps) -> Html {
-    let ssid_conf = props.conf.clone();
-    let changed = props.changed.clone();
+#[derive(Clone)]
+struct ApConfForm {
+    ssid: TextField<String>,
+    hidden_ssid: CheckedField<bool>,
 
-    let ssid = Rc::new(Field::new(
-        props.conf.as_ref().map(|conf| conf.ssid.clone()),
-        |value_str| Ok(value_str.clone()),
-        move |value| {
-            if let Some(conf) = &ssid_conf {
-                let mut conf = conf.clone();
-                conf.ssid = value.clone();
-            
-                changed.emit(conf);
-            }
-        },
-    ));
+    auth: TextField<AuthMethod>,
+    password: TextField<String>,
+    password_confirm: TextField<String>,
 
-    let ssid2 = ssid.clone();
+    ip_conf_enabled: CheckedField<bool>,
+    dhcp_server_enabled: CheckedField<bool>,
+    subnet: TextField<Subnet>,
+    dns: TextField<Option<Ipv4Addr>>,
+    secondary_dns: TextField<Option<Ipv4Addr>>,
+}
 
+impl ApConfForm {
+    fn new(callback: Callback<Option<AccessPointConfiguration>>) -> Self {
+        let shared_cb = Rc::new(RefCell::new(Callback::from(|_| {})));
+
+        fn changed<S>(shared_cb: Rc<RefCell<Callback<()>>>) -> impl Fn(Result<S, String>) {
+            move |_| shared_cb.borrow().emit(())
+        }
+
+        let password = Field::text(Ok, changed(shared_cb.clone()));
+
+        let dns = TextField::<Option<Ipv4Addr>>::text(
+            |raw_value| {
+                if raw_value.trim().is_empty() {
+                    Ok(None)
+                } else {
+                    Ipv4Addr::from_str(&raw_value).map(Some).map_err(|_| {
+                        "Invalid IP address format, expected XXX.XXX.XXX.XXX".to_owned()
+                    })
+                }
+            },
+            changed(shared_cb.clone()),
+        );
+
+        let this = Self {
+            ssid: Field::text(Ok, changed(shared_cb.clone())),
+            hidden_ssid: Field::checked(Ok, changed(shared_cb.clone())),
+            auth: Field::text(
+                |raw_value| {
+                    Ok(AuthMethod::iter()
+                        .find(|auth| auth.to_string() == raw_value)
+                        .unwrap_or(Default::default()))
+                },
+                changed(shared_cb.clone()),
+            ),
+            password: password.clone(),
+            password_confirm: Field::text(
+                move |raw_text| {
+                    if raw_text == password.raw_value() {
+                        Ok(raw_text)
+                    } else {
+                        Err("Passwords do not match".into())
+                    }
+                },
+                changed(shared_cb.clone()),
+            ),
+            ip_conf_enabled: Field::checked(Ok, changed(shared_cb.clone())),
+            dhcp_server_enabled: Field::checked(Ok, changed(shared_cb.clone())),
+            subnet: Field::text(
+                |raw_text| Subnet::from_str(&raw_text).map_err(str::to_owned),
+                changed(shared_cb.clone()),
+            ),
+            dns: dns.clone(),
+            secondary_dns: dns,
+        };
+
+        *shared_cb.borrow_mut() = {
+            let this = this.clone();
+
+            Callback::from(move |_| callback.emit(this.get()))
+        };
+
+        this
+    }
+
+    fn reset(&self, conf: &AccessPointConfiguration) {
+        self.ssid.reset(conf.ssid.clone());
+        self.hidden_ssid.reset(conf.ssid_hidden);
+
+        self.auth.reset(conf.auth_method.to_string());
+        self.password.reset(conf.password.clone());
+        self.password_confirm.reset(conf.password.clone());
+
+        self.ip_conf_enabled.reset(conf.ip_conf.is_some());
+
+        self.dhcp_server_enabled
+            .reset(conf.ip_conf.map(|i| i.dhcp_enabled).unwrap_or(false));
+        self.subnet.reset(
+            conf.ip_conf
+                .map(|i| i.subnet.to_string())
+                .unwrap_or_else(|| String::new()),
+        );
+        self.dns.reset(
+            conf.ip_conf
+                .and_then(|i| i.dns.map(|d| d.to_string()))
+                .unwrap_or_else(|| String::new()),
+        );
+        self.secondary_dns.reset(
+            conf.ip_conf
+                .and_then(|i| i.secondary_dns.map(|d| d.to_string()))
+                .unwrap_or_else(|| String::new()),
+        );
+    }
+
+    fn get(&self) -> Option<AccessPointConfiguration> {
+        let errors = self.ssid.has_errors();
+
+        if errors {
+            None
+        } else {
+            Some(AccessPointConfiguration {
+                ssid: self.ssid.value().unwrap(),
+                ssid_hidden: self.hidden_ssid.value().unwrap(),
+
+                auth_method: self.auth.value().unwrap(),
+                password: self.password.value().unwrap(),
+
+                ip_conf: if self.ip_conf_enabled.value().unwrap() {
+                    Some(RouterConfiguration {
+                        dhcp_enabled: self.dhcp_server_enabled.value().unwrap(),
+                        subnet: self.subnet.value().unwrap(),
+                        dns: self.dns.value().unwrap(),
+                        secondary_dns: self.secondary_dns.value().unwrap(),
+                    })
+                } else {
+                    None
+                },
+
+                ..Default::default()
+            })
+        }
+    }
+}
+
+fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
     html! {
         <>
         // SSID
@@ -1357,328 +1468,486 @@ fn ap_conf(props: &ApConfProps) -> Html {
             <label class="label">{ "SSID" }</label>
             <div class="control">
                 <input
-                    class="input" 
-                    type="text" 
-                    placeholder="0..24 characters" 
-                    value={ssid.value()} 
-                    disabled={props.disabled}
-                    onchange={move |event| ssid.on_change(&event)}
+                    class="input"
+                    type="text"
+                    placeholder="0..24 characters"
+                    value={form.ssid.raw_value()}
+                    {disabled}
+                    oninput={form.ssid.change()}
                     />
             </div>
-            <p class="help">{ssid2.error().unwrap_or_else(|| "".into())}</p>
+            <p class="help">{form.ssid.error_str()}</p>
+        </div>
+
+        // Hide SSID
+        <div class="field">
+            <label class="checkbox" {disabled}>
+                <input
+                    type="checkbox"
+                    checked={form.hidden_ssid.raw_value()}
+                    {disabled}
+                    onclick={form.hidden_ssid.change()}
+                />
+                {"Hidden"}
+            </label>
+        </div>
+
+        // Authentication
+        <div class="field">
+            <label class="label">{"Authentication"}</label>
+            <div class="control">
+                <div class="select">
+                    <select disabled={disabled} onchange={form.auth.change()}>
+                    {
+                        AuthMethod::iter().map(|item| {
+                            html! {
+                                <option value={item.to_string()} selected={Some(item) == form.auth.value()}>
+                                    {item.get_message().map(str::to_owned).unwrap_or_else(|| item.to_string())}
+                                </option>
+                            }
+                        })
+                        .collect::<Html>()
+                    }
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        {
+            if form.auth.value() != Some(AuthMethod::None) {
+                html! {
+                    <>
+                    // Password
+                    <div class="field">
+                        <label class="label">{if form.auth.value() == Some(wifi::AuthMethod::WEP) { "Key" } else { "Password" }}</label>
+                        <div class="control">
+                            <input
+                                class="input"
+                                type="password"
+                                placeholder="0..24 characters"
+                                value={form.password.raw_value()}
+                                disabled={disabled}
+                                oninput={form.password.change()}
+                                />
+                        </div>
+                        <p class="help">{form.password.error_str()}</p>
+                    </div>
+
+                    // Confirm password
+                    <div class="field">
+                        <label class="label">{if form.auth.value() == Some(wifi::AuthMethod::WEP) { "Key Confirmation" } else { "Password Confirmation" }}</label>
+                        <div class="control">
+                            <input
+                                class="input"
+                                type="password"
+                                placeholder="0..24 characters"
+                                value={form.password_confirm.raw_value()}
+                                disabled={disabled}
+                                oninput={form.password_confirm.change()}
+                                />
+                        </div>
+                        <p class="help">{form.password_confirm.error_str()}</p>
+                    </div>
+                    </>
+                }
+            } else {
+                html! {}
+            }
+        }
+
+        // IP Configuration
+        <div class="field">
+            <label class="checkbox" {disabled}>
+                <input
+                    type="checkbox"
+                    checked={form.ip_conf_enabled.raw_value()}
+                    {disabled}
+                    onclick={form.ip_conf_enabled.change()}
+                />
+                {"IP Configuration"}
+            </label>
+        </div>
+
+        // DHCP Server
+        <div class="field">
+            <label class="checkbox" {disabled}>
+                <input
+                    type="checkbox"
+                    checked={form.dhcp_server_enabled.raw_value()}
+                    disabled={disabled || !form.ip_conf_enabled.value().unwrap_or(false)}
+                    onclick={form.dhcp_server_enabled.change()}
+                />
+                {"DHCP Server"}
+            </label>
+        </div>
+
+        // Subnet
+        <div class="field">
+            <label class="label">{ "Subnet" }</label>
+            <div class="control">
+                <input
+                    class="input"
+                    type="text"
+                    placeholder="0..24 characters"
+                    value={form.subnet.raw_value()}
+                    disabled={disabled || !form.ip_conf_enabled.value().unwrap_or(false)}
+                    oninput={form.subnet.change()}
+                    />
+            </div>
+            <p class="help">{form.subnet.error_str()}</p>
+        </div>
+
+        // DNS
+        <div class="field">
+            <label class="label">{ "DNS" }</label>
+            <div class="control">
+                <input
+                    class="input"
+                    type="text"
+                    placeholder="0..24 characters"
+                    value={form.dns.raw_value()}
+                    disabled={disabled || !form.ip_conf_enabled.value().unwrap_or(false)}
+                    oninput={form.dns.change()}
+                    />
+            </div>
+            <p class="help">{form.dns.error_str()}</p>
+        </div>
+
+        // Secondary DNS
+        <div class="field">
+            <label class="label">{ "Secondary DNS" }</label>
+            <div class="control">
+                <input
+                    class="input"
+                    type="text"
+                    placeholder="0..24 characters"
+                    value={form.secondary_dns.raw_value()}
+                    disabled={disabled || !form.ip_conf_enabled.value().unwrap_or(false)}
+                    oninput={form.secondary_dns.change()}
+                    />
+            </div>
+            <p class="help">{form.secondary_dns.error_str()}</p>
         </div>
         </>
     }
 }
 
-        // <Chunk visible = { ap }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label="SSID"
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.ap_fields.ssid.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::ApSSIDChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.ap_fields.ssid.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label="SSID"
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.fields.ssid.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::SSIDChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.fields.ssid.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }>
-        //         <span slot="trailing" onclick = { ctx.link().callback(|_| Msg::ShowAccessPoints) }><MatIconButton icon="search"/></span>
-        //     </Cell>
-        // </Chunk>
+fn sta_conf(
+    conf: &ClientConfiguration,
+    changed: Callback<(ClientConfiguration, bool)>,
+    disabled: bool,
+) -> Html {
+    html! {}
+}
 
-        // // Hide SSID (AP only)
-        // <Chunk visible = { ap }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <span>{"Hide SSID"}</span>
-        //         <MatSwitch
-        //             disabled = { !self.is_loaded() }
-        //             onchange = { ctx.link().callback(|state| Msg::ApSSIDHiddenChanged(state)) }
-        //             checked = { self.conf.0.borrow().ap_conf().map(|a| a.ssid_hidden).unwrap_or(false) }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta && ap }>
-        //     <Cell span = { aspan }/>
-        // </Chunk>
+// <Chunk visible = { ap }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label="SSID"
+//             disabled = { !self.is_loaded() }
+//             value = { self.ap_fields.ssid.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::ApSSIDChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.ap_fields.ssid.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+// <Chunk visible = { sta }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label="SSID"
+//             disabled = { !self.is_loaded() }
+//             value = { self.fields.ssid.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::SSIDChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.fields.ssid.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }>
+//         <span slot="trailing" onclick = { ctx.link().callback(|_| Msg::ShowAccessPoints) }><MatIconButton icon="search"/></span>
+//     </Cell>
+// </Chunk>
 
-        // // Authentication
-        // <Chunk visible = { ap }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatSelect
-        //             outlined=true
-        //             label="Authentication"
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.ap_fields.auth_method.get_value_str().to_owned() }
-        //             onselected = { self.link.callback(|sd: SelectedDetail| match sd.index {
-        //                 ListIndex::Single(Some(index)) => Msg::ApAuthMethodChanged(AuthMethod::try_from(index as u8).unwrap()),
-        //                 _ => Msg::None,
-        //             })}
-        //         >
-        //             { as_list(self.ap_fields.auth_method.get_value()) }
-        //         </MatSelect>
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatSelect
-        //             outlined=true
-        //             label="Authentication"
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.fields.auth_method.get_value_str().to_owned() }
-        //             onselected = { self.link.callback(|sd: SelectedDetail| match sd.index {
-        //                 ListIndex::Single(Some(index)) => Msg::AuthMethodChanged(AuthMethod::try_from(index as u8).unwrap()),
-        //                 _ => Msg::None,
-        //             })}
-        //         >
-        //             { as_list(self.fields.auth_method.get_value()) }
-        //         </MatSelect>
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
+// // Hide SSID (AP only)
+// <Chunk visible = { ap }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <span>{"Hide SSID"}</span>
+//         <MatSwitch
+//             disabled = { !self.is_loaded() }
+//             onchange = { ctx.link().callback(|state| Msg::ApSSIDHiddenChanged(state)) }
+//             checked = { self.conf.0.borrow().ap_conf().map(|a| a.ssid_hidden).unwrap_or(false) }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+// <Chunk visible = { sta && ap }>
+//     <Cell span = { aspan }/>
+// </Chunk>
 
-        // // Password
-        // <Chunk visible = { ap && Some(wifi::AuthMethod::None) != self.ap_fields.auth_method.get_value() }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label = {
-        //                 if Some(wifi::AuthMethod::WEP) == self.ap_fields.auth_method.get_value() {
-        //                     "Key"
-        //                 } else {
-        //                     "Password"
-        //                 }
-        //             }
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.ap_fields.password.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::ApPasswordChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.ap_fields.password.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta && Some(wifi::AuthMethod::None) != self.fields.auth_method.get_value() }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label = {
-        //                 if Some(wifi::AuthMethod::WEP) == self.fields.auth_method.get_value() {
-        //                     "Key"
-        //                 } else {
-        //                     "Password"
-        //                 }
-        //             }
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.fields.password.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::PasswordChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper={ self.fields.password.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
+// // Authentication
+// <Chunk visible = { ap }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatSelect
+//             outlined=true
+//             label="Authentication"
+//             disabled = { !self.is_loaded() }
+//             value = { self.ap_fields.auth_method.get_value_str().to_owned() }
+//             onselected = { self.link.callback(|sd: SelectedDetail| match sd.index {
+//                 ListIndex::Single(Some(index)) => Msg::ApAuthMethodChanged(AuthMethod::try_from(index as u8).unwrap()),
+//                 _ => Msg::None,
+//             })}
+//         >
+//             { as_list(self.ap_fields.auth_method.get_value()) }
+//         </MatSelect>
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+// <Chunk visible = { sta }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatSelect
+//             outlined=true
+//             label="Authentication"
+//             disabled = { !self.is_loaded() }
+//             value = { self.fields.auth_method.get_value_str().to_owned() }
+//             onselected = { self.link.callback(|sd: SelectedDetail| match sd.index {
+//                 ListIndex::Single(Some(index)) => Msg::AuthMethodChanged(AuthMethod::try_from(index as u8).unwrap()),
+//                 _ => Msg::None,
+//             })}
+//         >
+//             { as_list(self.fields.auth_method.get_value()) }
+//         </MatSelect>
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
 
-        // // Confirm password (AP only)
-        // <Chunk visible = { ap && Some(wifi::AuthMethod::None) != self.ap_fields.auth_method.get_value() }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label = {
-        //                 if Some(wifi::AuthMethod::WEP) == self.ap_fields.auth_method.get_value() {
-        //                     "Confirm Key"
-        //                 } else {
-        //                     "Confirm Password"
-        //                 }
-        //             }
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.ap_fields.password_confirmed.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::ApPasswordConfirmedChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.ap_fields.password_confirmed.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta && ap && Some(wifi::AuthMethod::None) != self.ap_fields.auth_method.get_value() }>
-        //     <Cell span = { aspan }/>
-        // </Chunk>
+// // Password
+// <Chunk visible = { ap && Some(wifi::AuthMethod::None) != self.ap_fields.auth_method.get_value() }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label = {
+//                 if Some(wifi::AuthMethod::WEP) == self.ap_fields.auth_method.get_value() {
+//                     "Key"
+//                 } else {
+//                     "Password"
+//                 }
+//             }
+//             disabled = { !self.is_loaded() }
+//             value = { self.ap_fields.password.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::ApPasswordChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.ap_fields.password.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+// <Chunk visible = { sta && Some(wifi::AuthMethod::None) != self.fields.auth_method.get_value() }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label = {
+//                 if Some(wifi::AuthMethod::WEP) == self.fields.auth_method.get_value() {
+//                     "Key"
+//                 } else {
+//                     "Password"
+//                 }
+//             }
+//             disabled = { !self.is_loaded() }
+//             value = { self.fields.password.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::PasswordChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper={ self.fields.password.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
 
-        // // DHCP
-        // <Chunk visible = { ap }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <span>{"DHCP Server"}</span>
-        //         <MatSwitch
-        //             disabled = { !self.is_loaded() }
-        //             onchange = { self.link.callback(|state| Msg::ApDHCPEnabledChanged(state)) }
-        //             checked = { self.conf.0.borrow().ap_ip_conf().map(|i| i.dhcp_enabled).unwrap_or(false) }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <span>{"Use DHCP"}</span>
-        //         <MatSwitch
-        //             disabled = { !self.is_loaded() }
-        //             onchange = { self.link.callback(|state| Msg::DHCPChanged(state)) }
-        //             checked = { self.is_dhcp() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
+// // Confirm password (AP only)
+// <Chunk visible = { ap && Some(wifi::AuthMethod::None) != self.ap_fields.auth_method.get_value() }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label = {
+//                 if Some(wifi::AuthMethod::WEP) == self.ap_fields.auth_method.get_value() {
+//                     "Confirm Key"
+//                 } else {
+//                     "Confirm Password"
+//                 }
+//             }
+//             disabled = { !self.is_loaded() }
+//             value = { self.ap_fields.password_confirmed.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::ApPasswordConfirmedChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.ap_fields.password_confirmed.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+// <Chunk visible = { sta && ap && Some(wifi::AuthMethod::None) != self.ap_fields.auth_method.get_value() }>
+//     <Cell span = { aspan }/>
+// </Chunk>
 
-        // // Subnet
-        // <Chunk visible = { ap }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label="Subnet/Gateway"
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.ap_fields.subnet.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::ApSubnetChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.ap_fields.subnet.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label="Subnet/Gateway"
-        //             disabled = { !self.is_loaded() || self.is_dhcp() }
-        //             value = { self.fields.subnet.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::SubnetChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.fields.subnet.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
+// // DHCP
+// <Chunk visible = { ap }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <span>{"DHCP Server"}</span>
+//         <MatSwitch
+//             disabled = { !self.is_loaded() }
+//             onchange = { self.link.callback(|state| Msg::ApDHCPEnabledChanged(state)) }
+//             checked = { self.conf.0.borrow().ap_ip_conf().map(|i| i.dhcp_enabled).unwrap_or(false) }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+// <Chunk visible = { sta }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <span>{"Use DHCP"}</span>
+//         <MatSwitch
+//             disabled = { !self.is_loaded() }
+//             onchange = { self.link.callback(|state| Msg::DHCPChanged(state)) }
+//             checked = { self.is_dhcp() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
 
-        // // IP (STA only)
-        // <Chunk visible = { sta && ap }>
-        //     <Cell span = { aspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label="IP"
-        //             disabled = { !self.is_loaded() || self.is_dhcp() }
-        //             value = { self.fields.ip.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::IpChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.fields.ip.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
+// // Subnet
+// <Chunk visible = { ap }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label="Subnet/Gateway"
+//             disabled = { !self.is_loaded() }
+//             value = { self.ap_fields.subnet.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::ApSubnetChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.ap_fields.subnet.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+// <Chunk visible = { sta }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label="Subnet/Gateway"
+//             disabled = { !self.is_loaded() || self.is_dhcp() }
+//             value = { self.fields.subnet.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::SubnetChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.fields.subnet.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
 
-        // // DNS
-        // <Chunk visible = { ap }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label="DNS"
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.ap_fields.dns.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::ApDnsChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.ap_fields.dns.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label="DNS"
-        //             disabled = { !self.is_loaded() || self.is_dhcp() }
-        //             value = { self.fields.dns.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::DnsChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.fields.dns.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
+// // IP (STA only)
+// <Chunk visible = { sta && ap }>
+//     <Cell span = { aspan }/>
+// </Chunk>
+// <Chunk visible = { sta }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label="IP"
+//             disabled = { !self.is_loaded() || self.is_dhcp() }
+//             value = { self.fields.ip.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::IpChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.fields.ip.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
 
-        // // Secondary DNS
-        // <Chunk visible = { ap }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label="Secondary DNS"
-        //             disabled = { !self.is_loaded() }
-        //             value = { self.ap_fields.secondary_dns.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::ApSecondaryDnsChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.ap_fields.secondary_dns.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
-        // <Chunk visible = { sta }>
-        //     <Cell span = { lspan }/>
-        //     <Cell span = { mspan } style="text-align: center;">
-        //         <MatTextField
-        //             outlined=true
-        //             label="Secondary DNS"
-        //             disabled = { !self.is_loaded() || self.is_dhcp() }
-        //             value = { self.fields.secondary_dns.get_value_str().to_owned() }
-        //             oninput = { self.link.callback(|id: InputData| Msg::SecondaryDnsChanged(id.value)) }
-        //             validate_on_initial_render=true
-        //             auto_validate=true
-        //             helper = { self.fields.secondary_dns.get_error_str() }
-        //         />
-        //     </Cell>
-        //     <Cell span = { rspan }/>
-        // </Chunk>
+// // DNS
+// <Chunk visible = { ap }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label="DNS"
+//             disabled = { !self.is_loaded() }
+//             value = { self.ap_fields.dns.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::ApDnsChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.ap_fields.dns.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+// <Chunk visible = { sta }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label="DNS"
+//             disabled = { !self.is_loaded() || self.is_dhcp() }
+//             value = { self.fields.dns.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::DnsChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.fields.dns.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+
+// // Secondary DNS
+// <Chunk visible = { ap }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label="Secondary DNS"
+//             disabled = { !self.is_loaded() }
+//             value = { self.ap_fields.secondary_dns.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::ApSecondaryDnsChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.ap_fields.secondary_dns.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>
+// <Chunk visible = { sta }>
+//     <Cell span = { lspan }/>
+//     <Cell span = { mspan } style="text-align: center;">
+//         <MatTextField
+//             outlined=true
+//             label="Secondary DNS"
+//             disabled = { !self.is_loaded() || self.is_dhcp() }
+//             value = { self.fields.secondary_dns.get_value_str().to_owned() }
+//             oninput = { self.link.callback(|id: InputData| Msg::SecondaryDnsChanged(id.value)) }
+//             validate_on_initial_render=true
+//             auto_validate=true
+//             helper = { self.fields.secondary_dns.get_error_str() }
+//         />
+//     </Cell>
+//     <Cell span = { rspan }/>
+// </Chunk>

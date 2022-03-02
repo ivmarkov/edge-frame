@@ -2,36 +2,15 @@ use std::{collections, future::Future, ops::DerefMut, pin::Pin, time::Duration, 
 
 use enumset::*;
 
-use js_sys::{Function, Promise};
-
-use wasm_bindgen::{prelude::Closure, JsValue};
-use wasm_bindgen_futures::JsFuture;
-
-use crate::wasm_future::WasmFuture;
 pub use embedded_svc::wifi::*;
+use gloo_timers::future::TimeoutFuture;
 
 #[derive(Clone, PartialEq)]
 pub struct Dummy;
 
 impl Dummy {
-    fn delay(duration: Duration) -> Pin<Box<dyn Future<Output = Result<(), anyhow::Error>> + Send>> {
-        WasmFuture::new(async move {
-            let mut cb = Box::new(|resolve: Function, _reject: Function| {
-                web_sys::window()
-                    .unwrap()
-                    .set_timeout_with_callback_and_timeout_and_arguments_0(
-                        &Closure::once_into_js(move || resolve.call0(&JsValue::null()).unwrap())
-                            .into(),
-                        duration.as_millis() as i32,
-                    )
-                    .unwrap();
-            });
-
-            match JsFuture::from(Promise::new(cb.deref_mut())).await {
-                Ok(_) => Ok(()),
-                Err(_) => anyhow::bail!("Should never happen"),
-            }
-        })
+    fn delay(duration: Duration) -> TimeoutFuture {
+        TimeoutFuture::new(duration.as_millis() as _)
     }
 }
 
@@ -40,13 +19,13 @@ pub struct WifiAsync;
 
 impl WifiAsync {
     pub async fn get_capabilities(&self) -> Result<EnumSet<Capability>, anyhow::Error> {
-        Dummy::delay(Duration::from_millis(500)).await?;
+        Dummy::delay(Duration::from_millis(5000)).await;
 
         Ok((Capability::Client | Capability::AccessPoint | Capability::Mixed).into())
     }
 
     pub async fn get_status(&self) -> Result<Status, anyhow::Error> {
-        Dummy::delay(Duration::from_millis(500)).await?;
+        Dummy::delay(Duration::from_millis(6000)).await;
 
         Ok(Status(ClientStatus::Stopped, ApStatus::Stopped))
     }
@@ -54,7 +33,7 @@ impl WifiAsync {
     //async fn scan_n<const N: usize = 20>(&mut self) -> Result<([AccessPointInfo; N], usize)>;
 
     pub async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>, anyhow::Error> {
-        Dummy::delay(Duration::from_millis(4000)).await?;
+        Dummy::delay(Duration::from_millis(4000)).await;
 
         Ok(std::vec![
             AccessPointInfo {
@@ -90,7 +69,7 @@ impl WifiAsync {
     }
 
     pub async fn get_configuration(&self) -> Result<Configuration, anyhow::Error> {
-        Dummy::delay(Duration::from_millis(2000)).await?;
+        Dummy::delay(Duration::from_millis(5000)).await;
 
         Ok(Configuration::Mixed(
             ClientConfiguration {
@@ -100,12 +79,12 @@ impl WifiAsync {
             },
             AccessPointConfiguration {
                 ..Default::default()
-            }
+            },
         ))
     }
 
     pub async fn set_configuration(&mut self, _conf: &Configuration) -> Result<(), anyhow::Error> {
-        Dummy::delay(Duration::from_millis(500)).await?;
+        Dummy::delay(Duration::from_millis(500)).await;
 
         Ok(())
     }
