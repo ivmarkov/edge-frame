@@ -90,7 +90,7 @@ where
     }
 
     pub fn error_str(&self) -> String {
-        self.error().unwrap_or_else(|| String::new())
+        self.error().unwrap_or_else(|| "\u{00a0}".into())
     }
 
     pub fn change<V>(&self) -> impl Fn(V)

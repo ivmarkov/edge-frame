@@ -1491,6 +1491,29 @@ impl ApConfForm {
 }
 
 fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
+    let disabled_ip = disabled || !form.ip_conf_enabled.value().unwrap_or(false);
+
+    let hidden = if disabled { "visibility: hidden;" } else { "" };
+    let hidden_ip = if disabled_ip {
+        "visibility: hidden;"
+    } else {
+        ""
+    };
+
+    let input_class =
+        |errors| classes!("input", if !disabled && errors { "is-danger" } else { "" });
+
+    let input_class_ip = |errors| {
+        classes!(
+            "input",
+            if !disabled_ip && errors {
+                "is-danger"
+            } else {
+                ""
+            }
+        )
+    };
+
     html! {
         <>
         // SSID
@@ -1498,7 +1521,7 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
             <label class="label">{ "SSID" }</label>
             <div class="control">
                 <input
-                    class="input"
+                    class={input_class(form.ssid.has_errors())}
                     type="text"
                     placeholder="0..24 characters"
                     value={form.ssid.raw_value()}
@@ -1506,7 +1529,7 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
                     oninput={form.ssid.change()}
                     />
             </div>
-            <p class="help">{form.ssid.error_str()}</p>
+            <p class="help is-danger" style={hidden}>{form.ssid.error_str()}</p>
         </div>
 
         // Hide SSID
@@ -1552,7 +1575,7 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
                         <label class="label">{if form.auth.value() == Some(wifi::AuthMethod::WEP) { "Key" } else { "Password" }}</label>
                         <div class="control">
                             <input
-                                class="input"
+                                class={input_class(form.password.has_errors())}
                                 type="password"
                                 placeholder="0..24 characters"
                                 value={form.password.raw_value()}
@@ -1560,7 +1583,7 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
                                 oninput={form.password.change()}
                                 />
                         </div>
-                        <p class="help">{form.password.error_str()}</p>
+                        <p class="help is-danger" style={hidden}>{form.password.error_str()}</p>
                     </div>
 
                     // Confirm password
@@ -1568,7 +1591,7 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
                         <label class="label">{if form.auth.value() == Some(wifi::AuthMethod::WEP) { "Key Confirmation" } else { "Password Confirmation" }}</label>
                         <div class="control">
                             <input
-                                class="input"
+                                class={input_class(form.password_confirm.has_errors())}
                                 type="password"
                                 placeholder="0..24 characters"
                                 value={form.password_confirm.raw_value()}
@@ -1576,7 +1599,7 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
                                 oninput={form.password_confirm.change()}
                                 />
                         </div>
-                        <p class="help">{form.password_confirm.error_str()}</p>
+                        <p class="help is-danger" style={hidden}>{form.password_confirm.error_str()}</p>
                     </div>
                     </>
                 }
@@ -1600,11 +1623,11 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
 
         // DHCP Server
         <div class="field">
-            <label class="checkbox" {disabled}>
+            <label class="checkbox" disabled={disabled_ip}>
                 <input
                     type="checkbox"
                     checked={form.dhcp_server_enabled.raw_value()}
-                    disabled={disabled || !form.ip_conf_enabled.value().unwrap_or(false)}
+                    disabled={disabled_ip}
                     onclick={form.dhcp_server_enabled.change()}
                 />
                 {"DHCP Server"}
@@ -1616,15 +1639,15 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
             <label class="label">{ "Subnet" }</label>
             <div class="control">
                 <input
-                    class="input"
+                    class={input_class_ip(form.subnet.has_errors())}
                     type="text"
                     placeholder="0..24 characters"
                     value={form.subnet.raw_value()}
-                    disabled={disabled || !form.ip_conf_enabled.value().unwrap_or(false)}
+                    disabled={disabled_ip}
                     oninput={form.subnet.change()}
                     />
             </div>
-            <p class="help">{form.subnet.error_str()}</p>
+            <p class="help is-danger" style={hidden_ip}>{form.subnet.error_str()}</p>
         </div>
 
         // DNS
@@ -1632,15 +1655,15 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
             <label class="label">{ "DNS" }</label>
             <div class="control">
                 <input
-                    class="input"
+                    class={input_class_ip(form.dns.has_errors())}
                     type="text"
                     placeholder="0..24 characters"
                     value={form.dns.raw_value()}
-                    disabled={disabled || !form.ip_conf_enabled.value().unwrap_or(false)}
+                    disabled={disabled_ip}
                     oninput={form.dns.change()}
                     />
             </div>
-            <p class="help">{form.dns.error_str()}</p>
+            <p class="help is-danger" style={hidden_ip}>{form.dns.error_str()}</p>
         </div>
 
         // Secondary DNS
@@ -1648,15 +1671,15 @@ fn ap_conf(form: &ApConfForm, disabled: bool) -> Html {
             <label class="label">{ "Secondary DNS" }</label>
             <div class="control">
                 <input
-                    class="input"
+                    class={input_class_ip(form.secondary_dns.has_errors())}
                     type="text"
                     placeholder="0..24 characters"
                     value={form.secondary_dns.raw_value()}
-                    disabled={disabled || !form.ip_conf_enabled.value().unwrap_or(false)}
+                    disabled={disabled_ip}
                     oninput={form.secondary_dns.change()}
                     />
             </div>
-            <p class="help">{form.secondary_dns.error_str()}</p>
+            <p class="help is-danger" style={hidden_ip}>{form.secondary_dns.error_str()}</p>
         </div>
         </>
     }
