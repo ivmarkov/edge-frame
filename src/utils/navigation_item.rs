@@ -39,7 +39,20 @@ where
             href="#"
             {onclick}
         >
-            {props.text.clone()}
+        {
+            if let Some(icon) = props.icon.as_ref() {
+                html! {
+                    <div style="position:relative">
+                        <span class="icon"><i class={icon}></i></span>
+                        <span>{props.text.clone()}</span>
+                    </div>
+                }
+            } else {
+                html! {
+                    {props.text.clone()}
+                }
+            }
+        }
         </a>
     }
 }

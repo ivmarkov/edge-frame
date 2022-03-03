@@ -26,8 +26,8 @@ where
     };
 
     html! {
-        <span class="icon">
+        <div class="icon is-large">
             <i class={props.icon.clone()} {onclick}></i>
-        </span>
+        </div>
     }
 }

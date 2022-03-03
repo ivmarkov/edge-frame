@@ -39,8 +39,6 @@ where
     /// The active role in the app.
     pub active_role: Role,
 
-    pub app_bar_renderer: Option<Callback2<(), Html>>,
-
     /// The API endpoint to be used by all plugins communicating with the server.
     /// Might be `None` if the app is in "demo" mode and is not supposed to file requests to the server.
     pub api_endpoint: Option<APIEndpoint>,
@@ -67,7 +65,6 @@ where
                     headers: headers.clone(),
                 },
             ),
-            app_bar_renderer: self.app_bar_renderer.clone(),
         }
     }
 }
@@ -241,7 +238,6 @@ impl SimplePlugin<bool> {
                 active_route: props.active_route == croute,
                 active_role: props.active_role,
                 api_endpoint: props.api_endpoint,
-                app_bar_renderer: props.app_bar_renderer,
             })
         });
 
@@ -300,11 +296,19 @@ where
 
     fn content_component(&self) -> Callback2<PluginProps<R>, Html> {
         let min_role = self.min_role;
+        let name = self.name.clone();
         let route = self.route.clone();
         let component = self.component.clone();
         Callback2::from(move |props: PluginProps<R>| {
             if min_role <= props.active_role && props.active_route == route {
-                component.call(props)
+                html! {
+                    <section class="section">
+                        <h1 class="title">{name.clone()}</h1>
+                        <div>
+                            { component.call(props) }
+                        </div>
+                    </section>
+                }
             } else {
                 html! {}
             }

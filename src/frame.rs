@@ -9,13 +9,16 @@ use embedded_svc::utils::rest::role::Role;
 use crate::plugin::*;
 use crate::utils::*;
 
-#[derive(Properties, Clone, PartialEq)]
+#[derive(Properties, Clone, Default, PartialEq)]
 pub struct FrameProps<R>
 where
     R: Routable + PartialEq + Clone,
 {
     #[prop_or_default]
     pub app_title: String,
+
+    #[prop_or_default]
+    pub app_url: String,
 
     #[prop_or(Vec::new())]
     pub navigation: Vec<NavigationPlugin<R>>,
@@ -24,25 +27,11 @@ where
     pub content: Vec<ContentPlugin<R>>,
 
     // TODO: Most likely should be state
-    #[prop_or_default]
+    #[prop_or(Role::Admin)]
     pub active_role: Role,
 
+    #[prop_or_default]
     pub api_endpoint: Option<APIEndpoint>,
-}
-
-impl<R> Default for FrameProps<R>
-where
-    R: Routable + PartialEq + Clone,
-{
-    fn default() -> Self {
-        FrameProps {
-            app_title: "".into(),
-            navigation: Vec::new(),
-            content: Vec::new(),
-            active_role: Role::Admin,
-            api_endpoint: None,
-        }
-    }
 }
 
 #[function_component(Frame)]
@@ -56,12 +45,12 @@ where
 
     html! {
         <BrowserRouter>
-            <Switch<R> render={Switch::render(move |routable: &R| view(&props, *open, routable))}/>
+            <Switch<R> render={Switch::render(move |routable: &R| render(&props, *open, routable))}/>
         </BrowserRouter>
     }
 }
 
-fn view<R>(props: &FrameProps<R>, open: bool, routable: &R) -> Html
+fn render<R>(props: &FrameProps<R>, open: bool, routable: &R) -> Html
 where
     R: Routable + PartialEq + Clone + Copy + Debug + 'static,
 {
@@ -80,7 +69,7 @@ where
     if normal.is_empty() && settings.is_empty() {
         return html! {
             <>
-                { view_content(props, routable.clone()) }
+                { render_content(props, routable.clone()) }
             </>
         };
     }
@@ -89,20 +78,32 @@ where
         <>
         <nav class="navbar" role="navigation" aria-label="main navigation">
             <div class="navbar-brand">
-                <a class="navbar-item" href="https://bulma.io">
-                    <img src="https://bulma.io/images/bulma-logo.png" width="112" height="28"/>
-                </a>
+                {
+                    if !props.app_title.is_empty() {
+                        if props.app_url.is_empty() {
+                            html! {
+                                <div class="navbar-item is-size-3">{props.app_title.clone()}</div>
+                            }
+                        } else {
+                            html! {
+                                <a class="navbar-item is-size-3" href={props.app_url.clone()}>{props.app_title.clone()}</a>
+                            }
+                        }
+                    } else {
+                        html! {}
+                    }
+                }
 
-                <a href="#" role="button" class={classes!("navbar-burger", if_true(open, "is-active"))} aria-label="menu" aria-expanded="false" data-target="navbarBasicExample">
+                <a href="#" role="button" class={classes!("navbar-burger", if_true(open, "is-active"))} aria-label="menu" aria-expanded="false" data-target="navbar">
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
                 </a>
             </div>
 
-            <div id="navbarBasicExample" class={classes!("navbar-menu", if_true(open, "is-active"))}>
+            <div id="navbar" class={classes!("navbar-menu", if_true(open, "is-active"))}>
                 <div class="navbar-start">
-                    { view_plugins(props, None, &normal, routable) }
+                    { render_plugins(props, &normal, routable) }
 
                     {
                         if !settings.is_empty() {
@@ -111,7 +112,7 @@ where
                                     <a href="#" class="navbar-link">{"Settings"}</a>
 
                                     <div class="navbar-dropdown">
-                                        { view_plugins(props, None, &settings, routable) }
+                                        { render_plugins(props, &settings, routable) }
                                     </div>
                                 </div>
                             }
@@ -124,18 +125,18 @@ where
                 <div class="navbar-end">
                     <div class="navbar-item">
                         <div class="buttons">
-                            { view_plugins(props, None, &status, routable) }
+                            { render_plugins(props, &status, routable) }
                         </div>
                     </div>
                 </div>
             </div>
         </nav>
-        { view_content(props, routable.clone()) }
+        { render_content(props, routable.clone()) }
         </>
     }
 }
 
-fn view_content<R>(props: &FrameProps<R>, routable: R) -> Html
+fn render_content<R>(props: &FrameProps<R>, routable: R) -> Html
 where
     R: Routable + PartialEq + Clone + Copy + Debug + 'static,
 {
@@ -145,15 +146,11 @@ where
         .map(|cnt| cnt.component.clone())
         .collect::<Vec<_>>();
 
-    view_plugins(
-        props, None, //Some(get_app_bar_renderer(props, routable)),
-        &plugins, routable,
-    )
+    render_plugins(props, &plugins, routable)
 }
 
-fn view_plugins<R>(
+fn render_plugins<R>(
     props: &FrameProps<R>,
-    app_bar_renderer: Option<Callback2<(), Html>>,
     plugins: &[Callback2<PluginProps<R>, Html>],
     routable: R,
 ) -> Html
@@ -166,14 +163,13 @@ where
                 active_route: routable,
                 active_role: props.active_role,
                 api_endpoint: props.api_endpoint.clone(),
-                app_bar_renderer: app_bar_renderer.clone(),
             }))
     }
 }
 
-fn get_plugins<R, F: Fn(&NavigationPlugin<R>) -> bool>(
+fn get_plugins<R>(
     props: &FrameProps<R>,
-    criteria: F,
+    criteria: impl Fn(&NavigationPlugin<R>) -> bool,
 ) -> Vec<Callback2<PluginProps<R>, Html>>
 where
     R: Routable + PartialEq + Clone + Copy + Debug + 'static,

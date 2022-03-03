@@ -1,92 +1,92 @@
-use std::{collections, future::Future, ops::DerefMut, pin::Pin, time::Duration, vec};
+#[cfg(feature = "demo")]
+pub use demo::*;
 
-use enumset::*;
+mod demo {
+    use std::vec;
 
-pub use embedded_svc::wifi::*;
-use gloo_timers::future::TimeoutFuture;
+    use enumset::*;
 
-#[derive(Clone, PartialEq)]
-pub struct Dummy;
+    use gloo_timers::future::TimeoutFuture;
 
-impl Dummy {
-    fn delay(duration: Duration) -> TimeoutFuture {
-        TimeoutFuture::new(duration.as_millis() as _)
-    }
-}
+    pub use embedded_svc::wifi::*;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct WifiAsync;
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct WifiEndpoint;
 
-impl WifiAsync {
-    pub async fn get_capabilities(&self) -> Result<EnumSet<Capability>, anyhow::Error> {
-        Dummy::delay(Duration::from_millis(5000)).await;
+    impl WifiEndpoint {
+        pub async fn get_capabilities(&self) -> Result<EnumSet<Capability>, anyhow::Error> {
+            TimeoutFuture::new(5000).await;
 
-        Ok((Capability::Client | Capability::AccessPoint | Capability::Mixed).into())
-    }
+            Ok((Capability::Client | Capability::AccessPoint | Capability::Mixed).into())
+        }
 
-    pub async fn get_status(&self) -> Result<Status, anyhow::Error> {
-        Dummy::delay(Duration::from_millis(6000)).await;
+        pub async fn get_status(&self) -> Result<Status, anyhow::Error> {
+            TimeoutFuture::new(6000).await;
 
-        Ok(Status(ClientStatus::Stopped, ApStatus::Stopped))
-    }
+            Ok(Status(ClientStatus::Stopped, ApStatus::Stopped))
+        }
 
-    //async fn scan_n<const N: usize = 20>(&mut self) -> Result<([AccessPointInfo; N], usize)>;
+        //async fn scan_n<const N: usize = 20>(&mut self) -> Result<([AccessPointInfo; N], usize)>;
 
-    pub async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>, anyhow::Error> {
-        Dummy::delay(Duration::from_millis(4000)).await;
+        pub async fn scan(&mut self) -> Result<vec::Vec<AccessPointInfo>, anyhow::Error> {
+            TimeoutFuture::new(4000).await;
 
-        Ok(std::vec![
-            AccessPointInfo {
-                ssid: "foo".into(),
-                bssid: [0; 6],
-                channel: 6,
-                secondary_channel: SecondaryChannel::None,
-                signal_strength: 2,
-                protocols: vec!(Protocol::P802D11BGN, Protocol::P802D11LR)
-                    .drain(..)
-                    .collect(),
-                auth_method: AuthMethod::WPA2Personal,
-            },
-            AccessPointInfo {
-                ssid: "bar".into(),
-                bssid: [0; 6],
-                channel: 3,
-                secondary_channel: SecondaryChannel::None,
-                signal_strength: 3,
-                protocols: vec!(Protocol::P802D11BGN).drain(..).collect(),
-                auth_method: AuthMethod::WEP,
-            },
-            AccessPointInfo {
-                ssid: "open".into(),
-                bssid: [0; 6],
-                channel: 1,
-                secondary_channel: SecondaryChannel::None,
-                signal_strength: 3,
-                protocols: vec!(Protocol::P802D11BGN).drain(..).collect(),
-                auth_method: AuthMethod::None,
-            },
-        ])
-    }
+            Ok(std::vec![
+                AccessPointInfo {
+                    ssid: "foo".into(),
+                    bssid: [0; 6],
+                    channel: 6,
+                    secondary_channel: SecondaryChannel::None,
+                    signal_strength: 2,
+                    protocols: vec!(Protocol::P802D11BGN, Protocol::P802D11LR)
+                        .drain(..)
+                        .collect(),
+                    auth_method: AuthMethod::WPA2Personal,
+                },
+                AccessPointInfo {
+                    ssid: "bar".into(),
+                    bssid: [0; 6],
+                    channel: 3,
+                    secondary_channel: SecondaryChannel::None,
+                    signal_strength: 3,
+                    protocols: vec!(Protocol::P802D11BGN).drain(..).collect(),
+                    auth_method: AuthMethod::WEP,
+                },
+                AccessPointInfo {
+                    ssid: "open".into(),
+                    bssid: [0; 6],
+                    channel: 1,
+                    secondary_channel: SecondaryChannel::None,
+                    signal_strength: 3,
+                    protocols: vec!(Protocol::P802D11BGN).drain(..).collect(),
+                    auth_method: AuthMethod::None,
+                },
+            ])
+        }
 
-    pub async fn get_configuration(&self) -> Result<Configuration, anyhow::Error> {
-        Dummy::delay(Duration::from_millis(5000)).await;
+        pub async fn get_configuration(&self) -> Result<Configuration, anyhow::Error> {
+            TimeoutFuture::new(5000).await;
 
-        Ok(Configuration::Mixed(
-            ClientConfiguration {
-                ssid: "foo".into(),
-                password: "pass".into(),
-                ..Default::default()
-            },
-            AccessPointConfiguration {
-                ..Default::default()
-            },
-        ))
-    }
+            Ok(Configuration::Mixed(
+                ClientConfiguration {
+                    ssid: "foo".into(),
+                    password: "pass".into(),
+                    ..Default::default()
+                },
+                AccessPointConfiguration {
+                    ..Default::default()
+                },
+            ))
+        }
 
-    pub async fn set_configuration(&mut self, _conf: &Configuration) -> Result<(), anyhow::Error> {
-        Dummy::delay(Duration::from_millis(500)).await;
+        pub async fn set_configuration(
+            &mut self,
+            _conf: &Configuration,
+        ) -> Result<(), anyhow::Error> {
+            TimeoutFuture::new(500).await;
 
-        Ok(())
+            Ok(())
+        }
     }
 }
 

@@ -1,31 +1,23 @@
-use embedded_svc::ipv4::{DHCPClientSettings, RouterConfiguration, Subnet};
-use std::collections::HashMap;
-use std::{cell::RefCell, convert::TryFrom, net::Ipv4Addr, rc::Rc, str::FromStr, vec};
-use strum::{EnumMessage, IntoEnumIterator};
+use std::net::Ipv4Addr;
+use std::str::FromStr;
 
 use enumset::EnumSet;
 
-use embedded_svc::wifi::{AccessPointConfiguration, ClientConfiguration, Configuration, Status};
-use embedded_svc::{
-    ipv4,
-    wifi::{AuthMethod, TransitionalState},
-};
+use strum::*;
 
-use futures::future::{select, Either};
-use futures::pin_mut;
 use log::info;
-use web_sys::HtmlInputElement;
+
 use yew::prelude::*;
 
+use embedded_svc::ipv4::{self, DHCPClientSettings, RouterConfiguration, Subnet};
 use embedded_svc::utils::rest::role::Role;
+use embedded_svc::wifi::{
+    AccessPointConfiguration, AuthMethod, ClientConfiguration, Configuration,
+};
 
-use crate::api::wifi::WifiAsync;
-
-use crate::api;
-
-use crate::utils::*;
-
+use crate::api::wifi::WifiEndpoint;
 use crate::plugin::*;
+use crate::utils::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Hash))]
@@ -48,7 +40,7 @@ pub fn plugin(behavior: PluginBehavior) -> SimplePlugin<bool> {
             }
             .into(),
         ),
-        icon: Some("wifi".into()),
+        icon: Some("fa-lg fa-solid fa-wifi".into()),
         min_role: Role::Admin,
         insertion_points: EnumSet::only(InsertionPoint::Navigation)
             .union(EnumSet::only(InsertionPoint::Status)),
@@ -70,7 +62,7 @@ pub struct WifiProps {
 
 #[function_component(Wifi)]
 pub fn wifi(props: &WifiProps) -> Html {
-    let api = WifiAsync {};
+    let api = WifiEndpoint {};
 
     let status_state = use_state_eq(|| None);
     let conf_state: UseStateHandle<Option<Configuration>> = use_state_eq(|| None);
@@ -179,9 +171,9 @@ pub fn wifi(props: &WifiProps) -> Html {
                     <div>
                         {
                             if *ap_active {
-                                ap_conf_form.draw(conf_state.is_none())
+                                ap_conf_form.render(conf_state.is_none())
                             } else {
-                                sta_conf_form.draw(conf_state.is_none())
+                                sta_conf_form.render(conf_state.is_none())
                             }
                         }
                     </div>
@@ -193,13 +185,13 @@ pub fn wifi(props: &WifiProps) -> Html {
                         <div class="tile is-4 is-vertical is-parent">
                             <div class="tile is-child box">
                                 <p class={classes!("title", if_true(ap_conf_form.has_errors(), "is-danger"))}>{"Access Point"}</p>
-                                {ap_conf_form.draw(conf_state.is_none())}
+                                {ap_conf_form.render(conf_state.is_none())}
                             </div>
                         </div>
                         <div class="tile is-4 is-vertical is-parent">
                             <div class="tile is-child box">
                                 <p class={classes!("title", if_true(sta_conf_form.has_errors(), "is-danger"))}>{"Client"}</p>
-                                {sta_conf_form.draw(conf_state.is_none())}
+                                {sta_conf_form.render(conf_state.is_none())}
                             </div>
                         </div>
                     </div>
@@ -361,7 +353,7 @@ impl ApConfForm {
         );
     }
 
-    fn draw(&self, disabled: bool) -> Html {
+    fn render(&self, disabled: bool) -> Html {
         let disabled_ip = disabled || !self.ip_conf_enabled.value().unwrap_or(false);
 
         let hidden = if_true(disabled, "visibility: hidden;");
@@ -700,7 +692,7 @@ impl StaConfForm {
         );
     }
 
-    fn draw(&self, disabled: bool) -> Html {
+    fn render(&self, disabled: bool) -> Html {
         let disabled_ip = disabled || !self.ip_conf_enabled.value().unwrap_or(false);
 
         let hidden = if_true(disabled, "visibility: hidden;");
