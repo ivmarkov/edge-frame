@@ -1,78 +1,204 @@
 use std::fmt::Debug;
-use std::vec::*;
 
+use yew::html::ChildrenRenderer;
 use yew::prelude::*;
+use yew::virtual_dom::VChild;
 use yew_router::prelude::*;
 
-use embedded_svc::utils::rest::role::Role;
+use super::util::*;
 
-use crate::plugin::*;
-use crate::utils::*;
+#[derive(Properties, Clone, Default, Debug, PartialEq)]
+pub struct NavProps {
+    #[prop_or_default]
+    pub children: Children,
+}
+
+#[function_component(Nav)]
+pub fn nav(props: &NavProps) -> Html {
+    html! {
+        <>
+            { for props.children.iter() }
+        </>
+    }
+}
+
+#[derive(Properties, Clone, Default, Debug, PartialEq)]
+pub struct NavGroupProps {
+    pub title: String,
+
+    #[prop_or_default]
+    pub children: Children,
+}
+
+#[function_component(NavGroup)]
+pub fn nav_group(props: &NavGroupProps) -> Html {
+    html! {
+        <div class="navbar-item has-dropdown is-hoverable">
+            <a href="#" class="navbar-link">{props.title.clone()}</a>
+
+            <div class="navbar-dropdown">
+                { for props.children.iter() }
+            </div>
+        </div>
+    }
+}
+
+#[derive(Properties, Clone, Default, Debug, PartialEq)]
+pub struct NavItemProps<R>
+where
+    R: Routable + Clone,
+{
+    /// The Switched item representing the route.
+    pub route: R,
+    /// Whether the component represents an active route.
+    #[prop_or_default]
+    pub active: bool,
+    /// The text to display.
+    #[prop_or_default]
+    pub text: String,
+    /// The icon to display.
+    #[prop_or_default]
+    pub icon: Option<String>,
+}
+
+#[function_component(NavItem)]
+pub fn nav_item<R>(props: &NavItemProps<R>) -> Html
+where
+    R: Routable + Clone + 'static,
+{
+    let history = use_history().unwrap();
+
+    let onclick = {
+        let route = props.route.clone();
+        Callback::once(move |_| history.push(route))
+    };
+
+    html! {
+        <a
+            class={classes!("navbar-item", if_true(props.active, "is-active"))}
+            href="#"
+            {onclick}
+        >
+        {
+            if let Some(icon) = props.icon.as_ref() {
+                html! {
+                    <div style="position:relative">
+                        <span class="icon"><i class={icon}></i></span>
+                        <span>{props.text.clone()}</span>
+                    </div>
+                }
+            } else {
+                html! {
+                    {props.text.clone()}
+                }
+            }
+        }
+        </a>
+    }
+}
+
+#[derive(Properties, Clone, Default, Debug, PartialEq)]
+pub struct StatusProps {
+    #[prop_or_default]
+    pub children: Children,
+}
+
+#[function_component(Status)]
+pub fn status(props: &StatusProps) -> Html {
+    html! {
+        <>
+            { for props.children.iter() }
+        </>
+    }
+}
+
+#[derive(Properties, Clone, Default, Debug, PartialEq)]
+pub struct StatusItemProps<R>
+where
+    R: Routable + Clone,
+{
+    /// The Switched item representing the route.
+    #[prop_or_default]
+    pub route: Option<R>,
+    /// The icon to display.
+    #[prop_or_default]
+    pub icon: String,
+}
+
+#[function_component(StatusItem)]
+pub fn status_item<R>(props: &StatusItemProps<R>) -> Html
+where
+    R: Routable + Clone + 'static,
+{
+    if let Some(route) = props.route.clone() {
+        let history = use_history().unwrap();
+
+        let onclick = Callback::once(move |_| history.push(route));
+
+        html! {
+            <div class="icon is-large">
+                <i class={props.icon.clone()} {onclick}></i>
+            </div>
+        }
+    } else {
+        html! {
+            <div class="icon is-large">
+                <i class={props.icon.clone()}></i>
+            </div>
+        }
+    }
+}
+
+#[derive(Properties, Clone, Default, Debug, PartialEq)]
+pub struct ContentProps {
+    #[prop_or_default]
+    pub children: Children,
+}
+
+#[function_component(Content)]
+pub fn content(props: &ContentProps) -> Html {
+    html! {
+        <>
+            { for props.children.iter() }
+        </>
+    }
+}
+
+#[derive(Clone, derive_more::From, PartialEq)]
+pub enum FrameChild {
+    Nav(VChild<Nav>),
+    Status(VChild<Status>),
+    Content(VChild<Content>),
+}
+
+#[allow(clippy::from_over_into)]
+impl Into<Html> for FrameChild {
+    fn into(self) -> Html {
+        match self {
+            Self::Nav(child) => child.into(),
+            Self::Status(child) => child.into(),
+            Self::Content(child) => child.into(),
+        }
+    }
+}
 
 #[derive(Properties, Clone, Default, PartialEq)]
-pub struct FrameProps<R>
-where
-    R: Routable + PartialEq + Clone,
-{
+pub struct FrameProps {
     #[prop_or_default]
     pub app_title: String,
 
     #[prop_or_default]
     pub app_url: String,
 
-    #[prop_or(Vec::new())]
-    pub navigation: Vec<NavigationPlugin<R>>,
-
-    #[prop_or(Vec::new())]
-    pub content: Vec<ContentPlugin<R>>,
-
-    // TODO: Most likely should be state
-    #[prop_or(Role::Admin)]
-    pub active_role: Role,
-
     #[prop_or_default]
-    pub api_endpoint: Option<APIEndpoint>,
+    pub children: ChildrenRenderer<FrameChild>,
 }
 
 #[function_component(Frame)]
-pub fn frame<R>(props: &FrameProps<R>) -> Html
-where
-    R: Routable + PartialEq + Clone + Copy + Debug + 'static,
-{
+pub fn frame(props: &FrameProps) -> Html {
     let props = props.clone();
 
     let open = use_state(|| false);
-
-    html! {
-        <BrowserRouter>
-            <Switch<R> render={Switch::render(move |routable: &R| render(&props, *open, routable))}/>
-        </BrowserRouter>
-    }
-}
-
-fn render<R>(props: &FrameProps<R>, open: bool, routable: &R) -> Html
-where
-    R: Routable + PartialEq + Clone + Copy + Debug + 'static,
-{
-    let routable = routable.clone();
-
-    let normal = get_plugins(props, |nav| {
-        nav.insertion_point == InsertionPoint::Navigation && nav.category != Category::Settings
-    });
-
-    let settings = get_plugins(props, |nav| {
-        nav.insertion_point == InsertionPoint::Navigation && nav.category == Category::Settings
-    });
-
-    let status = get_plugins(props, |nav| nav.insertion_point == InsertionPoint::Status);
-
-    if normal.is_empty() && settings.is_empty() {
-        return html! {
-            <>
-                { render_content(props, routable.clone()) }
-            </>
-        };
-    }
 
     html! {
         <>
@@ -94,90 +220,28 @@ where
                     }
                 }
 
-                <a href="#" role="button" class={classes!("navbar-burger", if_true(open, "is-active"))} aria-label="menu" aria-expanded="false" data-target="navbar">
+                <a href="#" role="button" class={classes!("navbar-burger", if_true(*open, "is-active"))} aria-label="menu" aria-expanded="false" data-target="navbar">
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
                 </a>
             </div>
 
-            <div id="navbar" class={classes!("navbar-menu", if_true(open, "is-active"))}>
+            <div id="navbar" class={classes!("navbar-menu", if_true(*open, "is-active"))}>
                 <div class="navbar-start">
-                    { render_plugins(props, &normal, routable) }
-
-                    {
-                        if !settings.is_empty() {
-                            html! {
-                                <div class="navbar-item has-dropdown is-hoverable">
-                                    <a href="#" class="navbar-link">{"Settings"}</a>
-
-                                    <div class="navbar-dropdown">
-                                        { render_plugins(props, &settings, routable) }
-                                    </div>
-                                </div>
-                            }
-                        } else {
-                            html! {}
-                        }
-                    }
+                    { for props.children.iter().filter(|child| matches!(child, FrameChild::Nav(_))) }
                 </div>
 
                 <div class="navbar-end">
                     <div class="navbar-item">
                         <div class="buttons">
-                            { render_plugins(props, &status, routable) }
+                        { for props.children.iter().filter(|child| matches!(child, FrameChild::Status(_))) }
                         </div>
                     </div>
                 </div>
             </div>
         </nav>
-        { render_content(props, routable.clone()) }
+        { for props.children.iter().filter(|child| matches!(child, FrameChild::Content(_))) }
         </>
     }
-}
-
-fn render_content<R>(props: &FrameProps<R>, routable: R) -> Html
-where
-    R: Routable + PartialEq + Clone + Copy + Debug + 'static,
-{
-    let plugins = props
-        .content
-        .iter()
-        .map(|cnt| cnt.component.clone())
-        .collect::<Vec<_>>();
-
-    render_plugins(props, &plugins, routable)
-}
-
-fn render_plugins<R>(
-    props: &FrameProps<R>,
-    plugins: &[Callback2<PluginProps<R>, Html>],
-    routable: R,
-) -> Html
-where
-    R: Routable + PartialEq + Clone + Copy + Debug + 'static,
-{
-    html! {
-        for plugins.iter().map(|component|
-            component.call(PluginProps {
-                active_route: routable,
-                active_role: props.active_role,
-                api_endpoint: props.api_endpoint.clone(),
-            }))
-    }
-}
-
-fn get_plugins<R>(
-    props: &FrameProps<R>,
-    criteria: impl Fn(&NavigationPlugin<R>) -> bool,
-) -> Vec<Callback2<PluginProps<R>, Html>>
-where
-    R: Routable + PartialEq + Clone + Copy + Debug + 'static,
-{
-    props
-        .navigation
-        .iter()
-        .filter(|nav| criteria(&nav))
-        .map(|nav| nav.component.clone())
-        .collect()
 }

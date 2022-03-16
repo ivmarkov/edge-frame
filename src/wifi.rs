@@ -1,23 +1,20 @@
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 
-use enumset::EnumSet;
-
 use strum::*;
 
-use log::info;
-
 use yew::prelude::*;
+use yew_router::Routable;
 
 use embedded_svc::ipv4::{self, DHCPClientSettings, RouterConfiguration, Subnet};
-use embedded_svc::utils::rest::role::Role;
 use embedded_svc::wifi::{
     AccessPointConfiguration, AuthMethod, ClientConfiguration, Configuration,
 };
 
-use crate::api::wifi::WifiEndpoint;
-use crate::plugin::*;
-use crate::utils::*;
+use crate::field::*;
+use crate::frame::{NavItem, StatusItem};
+use crate::redust::{use_projection, Projection, SimpleStore, SimpleStoreAction, Store};
+use crate::util::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Hash))]
@@ -27,119 +24,91 @@ pub enum PluginBehavior {
     Mixed,
 }
 
-pub fn plugin(behavior: PluginBehavior) -> SimplePlugin<bool> {
-    SimplePlugin {
-        name: "Wifi".into(),
-        description: Some(
-            match behavior {
-                PluginBehavior::STA => "A settings user interface for configuring Wifi access",
-                PluginBehavior::AP => "A settings user interface for configuring Wifi Access Point",
-                PluginBehavior::Mixed => {
-                    "A settings user interface for configuring WiFi Access Point and STA"
-                }
-            }
-            .into(),
-        ),
-        icon: Some("fa-lg fa-solid fa-wifi".into()),
-        min_role: Role::Admin,
-        insertion_points: EnumSet::only(InsertionPoint::Navigation)
-            .union(EnumSet::only(InsertionPoint::Status)),
-        category: Category::Settings,
-        route: true,
-        component: Callback2::from(move |plugin_props: PluginProps<bool>| {
-            html! {
-                <Wifi behavior={behavior} endpoint={plugin_props.api_endpoint}/>
-            }
-        }),
+impl Default for PluginBehavior {
+    fn default() -> Self {
+        Self::STA
     }
 }
 
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct WifiProps {
+pub struct WifiNavItemProps<R: Routable + PartialEq + Clone + 'static> {
+    #[prop_or_default]
+    pub active: bool,
+
+    pub route: R,
+}
+
+#[function_component(WifiNavItem)]
+pub fn wifi_nav_item<R: Routable + PartialEq + Clone + 'static>(
+    props: &WifiNavItemProps<R>,
+) -> Html {
+    html! {
+        <NavItem<R>
+            text="Wifi"
+            icon="fa-lg fa-solid fa-wifi"
+            route={props.route.clone()}
+            active={props.active}/>
+    }
+}
+
+#[derive(Properties, Clone, Debug, PartialEq)]
+pub struct WifiStatusItemProps<R: Routable + PartialEq + Clone + 'static, S: Store> {
+    #[prop_or_default]
+    pub active: bool,
+
+    pub route: R,
+
+    pub projection: Projection<S, WifiStore, WifiAction>,
+}
+
+#[function_component(WifiStatusItem)]
+pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Store>(
+    props: &WifiStatusItemProps<R, S>,
+) -> Html {
+    html! {
+        <StatusItem<R>
+            icon="fa-lg fa-solid fa-wifi"
+            route={props.route.clone()}/>
+    }
+}
+
+pub type WifiAction = SimpleStoreAction<Configuration>;
+pub type WifiStore = SimpleStore<Configuration>;
+
+#[derive(Properties, Clone, Debug, PartialEq)]
+pub struct WifiProps<S: Store> {
+    #[prop_or_default]
     pub behavior: PluginBehavior,
-    pub endpoint: Option<APIEndpoint>,
+
+    pub projection: Projection<S, WifiStore, WifiAction>,
 }
 
 #[function_component(Wifi)]
-pub fn wifi(props: &WifiProps) -> Html {
-    let api = WifiEndpoint {};
+pub fn wifi<S: Store>(props: &WifiProps<S>) -> Html {
+    let conf = use_projection(props.projection.clone());
 
-    let status_state = use_state_eq(|| None);
-    let conf_state: UseStateHandle<Option<Configuration>> = use_state_eq(|| None);
+    let conf_state: UseStateHandle<Option<Configuration>> =
+        use_state_eq(|| Some((&**conf).clone()));
 
     let ap_conf_form = ApConfForm::new();
     let sta_conf_form = StaConfForm::new();
 
-    {
-        let api = api.clone();
-        let status_state = status_state.clone();
-
-        use_effect_with_deps(
-            |_| {
-                wasm_bindgen_futures::spawn_local(async move {
-                    loop {
-                        let status = api.get_status().await.unwrap();
-                        info!("Got status {:?}", status);
-
-                        status_state.set(Some(status));
-                    }
-                });
-
-                || ()
-            },
-            (),
-        );
-    }
-
-    {
-        let api = api.clone();
-        let conf_state = conf_state.clone();
-        let ap_conf_form = ap_conf_form.clone();
-        let sta_conf_form = sta_conf_form.clone();
-
-        use_effect_with_deps(
-            |_| {
-                wasm_bindgen_futures::spawn_local(async move {
-                    //loop {
-                    let conf = api.get_configuration().await.unwrap();
-                    info!("Got conf {:?}", conf);
-
-                    if conf_state.as_ref() != Some(&conf) {
-                        ap_conf_form.set(conf.as_ap_conf_ref().unwrap_or(&Default::default()));
-                        sta_conf_form.set(conf.as_client_conf_ref().unwrap_or(&Default::default()));
-
-                        conf_state.set(Some(conf));
-                    }
-                    //}
-                });
-
-                || ()
-            },
-            (),
-        );
-    }
-
     let onclick = {
-        let api = api.clone();
         let ap_conf_form = ap_conf_form.clone();
         let sta_conf_form = sta_conf_form.clone();
 
         Callback::from(move |_| {
-            let mut conf = Configuration::Mixed(Default::default(), Default::default());
+            let mut new_conf = Configuration::Mixed(Default::default(), Default::default());
 
             if let Some(ap_conf) = ap_conf_form.get() {
-                *conf.as_ap_conf_mut() = ap_conf;
+                *new_conf.as_ap_conf_mut() = ap_conf;
             }
 
             if let Some(sta_conf) = sta_conf_form.get() {
-                *conf.as_client_conf_mut() = sta_conf;
+                *new_conf.as_client_conf_mut() = sta_conf;
             }
 
-            let mut api = api.clone();
-
-            wasm_bindgen_futures::spawn_local(async move {
-                api.set_configuration(&conf).await.unwrap();
-            });
+            conf.dispatch(SimpleStoreAction::Update(new_conf));
         })
     };
 

@@ -4,7 +4,7 @@ use web_sys::Event;
 use yew::{use_state, UseStateHandle};
 
 use super::callback2::Callback2;
-use super::*;
+use super::util::*;
 
 #[derive(Clone)]
 pub struct Field<R, S> {
