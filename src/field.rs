@@ -8,6 +8,7 @@ use super::util::*;
 
 #[derive(Clone)]
 pub struct Field<R, S> {
+    initial: R,
     value_state: UseStateHandle<R>,
     raw_value: Rc<RefCell<Option<R>>>,
     converter: Callback2<Event, R>,
@@ -37,7 +38,7 @@ where
 
 impl<R, S> Field<R, S>
 where
-    R: Default + Clone + 'static,
+    R: Default + Clone + PartialEq + 'static,
     S: Clone,
 {
     pub fn new(
@@ -45,6 +46,7 @@ where
         validate: impl Fn(R) -> Result<S, String> + 'static,
     ) -> Self {
         Self {
+            initial: Default::default(),
             value_state: use_state(|| Default::default()),
             raw_value: Rc::new(RefCell::new(None)),
             converter: Callback2::from(converter),
@@ -52,9 +54,15 @@ where
         }
     }
 
-    pub fn set(&self, raw_value: R) {
-        *self.raw_value.borrow_mut() = Some(raw_value.clone());
-        self.value_state.set(raw_value);
+    pub fn is_dirty(&self) -> bool {
+        self.has_errors() || self.raw_value() != self.initial
+    }
+
+    pub fn update(&self, raw_value: R) {
+        if !self.is_dirty() {
+            *self.raw_value.borrow_mut() = Some(raw_value.clone());
+            self.value_state.set(raw_value);
+        }
     }
 
     pub fn value(&self) -> Option<S> {
@@ -93,6 +101,6 @@ where
     }
 
     pub fn on_change(&self, event: Event) {
-        self.set(self.converter.call(event));
+        self.update(self.converter.call(event));
     }
 }

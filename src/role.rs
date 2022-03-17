@@ -1,16 +1,16 @@
-pub use embedded_svc::utils::rest::role::Role as RoleState;
+pub use embedded_svc::utils::rest::role::Role as RoleValue;
 
 use yew::prelude::*;
 
-use crate::redust::{use_projection, Projection, SimpleStore, SimpleStoreAction, Store};
+use crate::redust::{use_projection, Projection, Reducible2, ValueAction, ValueState};
 
-pub type RoleAction = SimpleStoreAction<RoleState>;
-pub type RoleStore = SimpleStore<RoleState>;
+pub type RoleAction = ValueAction<RoleValue>;
+pub type RoleState = ValueState<RoleValue>;
 
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct RoleProps<S: Store> {
-    pub role: RoleState,
-    pub projection: Projection<S, RoleStore, RoleAction>,
+pub struct RoleProps<R: Reducible2> {
+    pub role: RoleValue,
+    pub projection: Projection<R, RoleState, RoleAction>,
 
     #[prop_or_default]
     pub auth: bool,
@@ -20,7 +20,7 @@ pub struct RoleProps<S: Store> {
 }
 
 #[function_component(Role)]
-pub fn role<S: Store>(props: &RoleProps<S>) -> Html {
+pub fn role<R: Reducible2>(props: &RoleProps<R>) -> Html {
     let role = use_projection(props.projection.clone());
 
     if **role >= props.role {

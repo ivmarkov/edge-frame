@@ -10,10 +10,11 @@ use embedded_svc::ipv4::{self, DHCPClientSettings, RouterConfiguration, Subnet};
 use embedded_svc::wifi::{
     AccessPointConfiguration, AuthMethod, ClientConfiguration, Configuration,
 };
+use yew_router::hooks::use_route;
 
 use crate::field::*;
 use crate::frame::{NavItem, StatusItem};
-use crate::redust::{use_projection, Projection, SimpleStore, SimpleStoreAction, Store};
+use crate::redust::{use_projection, Projection, Reducible2, ValueAction, ValueState};
 use crate::util::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -32,9 +33,6 @@ impl Default for PluginBehavior {
 
 #[derive(Properties, Clone, Debug, PartialEq)]
 pub struct WifiNavItemProps<R: Routable + PartialEq + Clone + 'static> {
-    #[prop_or_default]
-    pub active: bool,
-
     pub route: R,
 }
 
@@ -42,27 +40,25 @@ pub struct WifiNavItemProps<R: Routable + PartialEq + Clone + 'static> {
 pub fn wifi_nav_item<R: Routable + PartialEq + Clone + 'static>(
     props: &WifiNavItemProps<R>,
 ) -> Html {
+    let route = use_route::<R>();
+
     html! {
         <NavItem<R>
             text="Wifi"
             icon="fa-lg fa-solid fa-wifi"
             route={props.route.clone()}
-            active={props.active}/>
+            active={Some(props.route.clone()) == route}/>
     }
 }
 
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct WifiStatusItemProps<R: Routable + PartialEq + Clone + 'static, S: Store> {
-    #[prop_or_default]
-    pub active: bool,
-
+pub struct WifiStatusItemProps<R: Routable + PartialEq + Clone + 'static, S: Reducible2> {
     pub route: R,
-
-    pub projection: Projection<S, WifiStore, WifiAction>,
+    pub projection: Projection<S, WifiState, WifiAction>,
 }
 
 #[function_component(WifiStatusItem)]
-pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Store>(
+pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Reducible2>(
     props: &WifiStatusItemProps<R, S>,
 ) -> Html {
     html! {
@@ -72,28 +68,31 @@ pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Store>(
     }
 }
 
-pub type WifiAction = SimpleStoreAction<Configuration>;
-pub type WifiStore = SimpleStore<Configuration>;
+pub type WifiAction = ValueAction<Option<Configuration>>;
+pub type WifiState = ValueState<Option<Configuration>>;
 
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct WifiProps<S: Store> {
+pub struct WifiProps<R: Reducible2> {
     #[prop_or_default]
     pub behavior: PluginBehavior,
 
-    pub projection: Projection<S, WifiStore, WifiAction>,
+    pub projection: Projection<R, WifiState, WifiAction>,
 }
 
 #[function_component(Wifi)]
-pub fn wifi<S: Store>(props: &WifiProps<S>) -> Html {
-    let conf = use_projection(props.projection.clone());
-
-    let conf_state: UseStateHandle<Option<Configuration>> =
-        use_state_eq(|| Some((&**conf).clone()));
+pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
+    let conf_store = use_projection(props.projection.clone());
+    let conf = (&**conf_store).as_ref();
 
     let ap_conf_form = ApConfForm::new();
     let sta_conf_form = StaConfForm::new();
 
+    //ap_conf_form.update(conf.and_then(|c| c.as_ap_conf_ref()));
+    //sta_conf_form.update(conf.and_then(|c| c.as_client_conf_ref()));
+
     let onclick = {
+        let conf_store = conf_store.clone();
+
         let ap_conf_form = ap_conf_form.clone();
         let sta_conf_form = sta_conf_form.clone();
 
@@ -108,7 +107,7 @@ pub fn wifi<S: Store>(props: &WifiProps<S>) -> Html {
                 *new_conf.as_client_conf_mut() = sta_conf;
             }
 
-            conf.dispatch(SimpleStoreAction::Update(new_conf));
+            conf_store.dispatch(ValueAction::Update(Some(new_conf)));
         })
     };
 
@@ -140,9 +139,9 @@ pub fn wifi<S: Store>(props: &WifiProps<S>) -> Html {
                     <div>
                         {
                             if *ap_active {
-                                ap_conf_form.render(conf_state.is_none())
+                                ap_conf_form.render(conf.is_none())
                             } else {
-                                sta_conf_form.render(conf_state.is_none())
+                                sta_conf_form.render(conf.is_none())
                             }
                         }
                     </div>
@@ -154,13 +153,13 @@ pub fn wifi<S: Store>(props: &WifiProps<S>) -> Html {
                         <div class="tile is-4 is-vertical is-parent">
                             <div class="tile is-child box">
                                 <p class={classes!("title", if_true(ap_conf_form.has_errors(), "is-danger"))}>{"Access Point"}</p>
-                                {ap_conf_form.render(conf_state.is_none())}
+                                {ap_conf_form.render(conf.is_none())}
                             </div>
                         </div>
                         <div class="tile is-4 is-vertical is-parent">
                             <div class="tile is-child box">
                                 <p class={classes!("title", if_true(sta_conf_form.has_errors(), "is-danger"))}>{"Client"}</p>
-                                {sta_conf_form.render(conf_state.is_none())}
+                                {sta_conf_form.render(conf.is_none())}
                             </div>
                         </div>
                     </div>
@@ -173,11 +172,11 @@ pub fn wifi<S: Store>(props: &WifiProps<S>) -> Html {
             class={"button my-4"}
             value="Save"
             disabled={
-                conf_state.is_none()
+                conf.is_none()
                 || ap_conf_form.has_errors()
                 || sta_conf_form.has_errors()
-                || conf_state.as_ref().and_then(|conf| conf.as_ap_conf_ref()) == ap_conf_form.get().as_ref()
-                    && conf_state.as_ref().and_then(|conf| conf.as_client_conf_ref()) == sta_conf_form.get().as_ref()
+                || conf.as_ref().and_then(|conf| conf.as_ap_conf_ref()) == ap_conf_form.get().as_ref()
+                    && conf.as_ref().and_then(|conf| conf.as_client_conf_ref()) == sta_conf_form.get().as_ref()
             }
             {onclick}
         />
@@ -293,29 +292,32 @@ impl ApConfForm {
         }
     }
 
-    fn set(&self, conf: &AccessPointConfiguration) {
-        self.ssid.set(conf.ssid.clone());
-        self.hidden_ssid.set(conf.ssid_hidden);
+    fn update(&self, conf: Option<&AccessPointConfiguration>) {
+        let dconf = Default::default();
+        let conf = conf.unwrap_or(&dconf);
 
-        self.auth.set(conf.auth_method.to_string());
-        self.password.set(conf.password.clone());
-        self.password_confirm.set(conf.password.clone());
+        self.ssid.update(conf.ssid.clone());
+        self.hidden_ssid.update(conf.ssid_hidden);
 
-        self.ip_conf_enabled.set(conf.ip_conf.is_some());
+        self.auth.update(conf.auth_method.to_string());
+        self.password.update(conf.password.clone());
+        self.password_confirm.update(conf.password.clone());
+
+        self.ip_conf_enabled.update(conf.ip_conf.is_some());
 
         self.dhcp_server_enabled
-            .set(conf.ip_conf.map(|i| i.dhcp_enabled).unwrap_or(false));
-        self.subnet.set(
+            .update(conf.ip_conf.map(|i| i.dhcp_enabled).unwrap_or(false));
+        self.subnet.update(
             conf.ip_conf
                 .map(|i| i.subnet.to_string())
                 .unwrap_or_else(|| String::new()),
         );
-        self.dns.set(
+        self.dns.update(
             conf.ip_conf
                 .and_then(|i| i.dns.map(|d| d.to_string()))
                 .unwrap_or_else(|| String::new()),
         );
-        self.secondary_dns.set(
+        self.secondary_dns.update(
             conf.ip_conf
                 .and_then(|i| i.secondary_dns.map(|d| d.to_string()))
                 .unwrap_or_else(|| String::new()),
@@ -618,32 +620,35 @@ impl StaConfForm {
         }
     }
 
-    fn set(&self, conf: &ClientConfiguration) {
-        self.ssid.set(conf.ssid.clone());
+    fn update(&self, conf: Option<&ClientConfiguration>) {
+        let dconf = Default::default();
+        let conf = conf.unwrap_or(&dconf);
 
-        self.auth.set(conf.auth_method.to_string());
-        self.password.set(conf.password.clone());
-        self.password_confirm.set(conf.password.clone());
+        self.ssid.update(conf.ssid.clone());
 
-        self.ip_conf_enabled.set(conf.ip_conf.is_some());
+        self.auth.update(conf.auth_method.to_string());
+        self.password.update(conf.password.clone());
+        self.password_confirm.update(conf.password.clone());
 
-        self.dhcp_enabled.set(
+        self.ip_conf_enabled.update(conf.ip_conf.is_some());
+
+        self.dhcp_enabled.update(
             conf.ip_conf
                 .as_ref()
                 .map(|i| matches!(i, ipv4::ClientConfiguration::DHCP(_)))
                 .unwrap_or(false),
         );
-        self.subnet.set(
+        self.subnet.update(
             conf.as_ip_conf_ref()
                 .and_then(|i| i.as_fixed_settings_ref().map(|i| i.subnet.to_string()))
                 .unwrap_or_else(|| String::new()),
         );
-        self.ip.set(
+        self.ip.update(
             conf.as_ip_conf_ref()
                 .and_then(|i| i.as_fixed_settings_ref().map(|i| i.ip.to_string()))
                 .unwrap_or_else(|| String::new()),
         );
-        self.dns.set(
+        self.dns.update(
             conf.as_ip_conf_ref()
                 .and_then(|i| {
                     i.as_fixed_settings_ref()
@@ -651,7 +656,7 @@ impl StaConfForm {
                 })
                 .unwrap_or_else(|| String::new()),
         );
-        self.secondary_dns.set(
+        self.secondary_dns.update(
             conf.as_ip_conf_ref()
                 .and_then(|i| {
                     i.as_fixed_settings_ref()

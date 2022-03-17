@@ -66,11 +66,17 @@ pub fn nav_item<R>(props: &NavItemProps<R>) -> Html
 where
     R: Routable + Clone + 'static,
 {
-    let history = use_history().unwrap();
+    let history = use_history();
 
     let onclick = {
         let route = props.route.clone();
-        Callback::once(move |_| history.push(route))
+        let history = history.clone();
+
+        Callback::once(move |_| {
+            if let Some(history) = history {
+                history.push(route)
+            }
+        })
     };
 
     html! {
@@ -131,9 +137,17 @@ where
     R: Routable + Clone + 'static,
 {
     if let Some(route) = props.route.clone() {
-        let history = use_history().unwrap();
+        let history = use_history();
 
-        let onclick = Callback::once(move |_| history.push(route));
+        let onclick = {
+            let history = history.clone();
+
+            Callback::once(move |_| {
+                if let Some(history) = history {
+                    history.push(route)
+                }
+            })
+        };
 
         html! {
             <div class="icon is-large">
