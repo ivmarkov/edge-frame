@@ -84,11 +84,11 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
     let conf_store = use_projection(props.projection.clone());
     let conf = (&**conf_store).as_ref();
 
-    let ap_conf_form = ApConfForm::new();
-    let sta_conf_form = StaConfForm::new();
+    let mut ap_conf_form = ApConfForm::new();
+    let mut sta_conf_form = StaConfForm::new();
 
-    //ap_conf_form.update(conf.and_then(|c| c.as_ap_conf_ref()));
-    //sta_conf_form.update(conf.and_then(|c| c.as_client_conf_ref()));
+    ap_conf_form.update(conf.and_then(|c| c.as_ap_conf_ref()));
+    sta_conf_form.update(conf.and_then(|c| c.as_client_conf_ref()));
 
     let onclick = {
         let conf_store = conf_store.clone();
@@ -265,6 +265,20 @@ impl ApConfForm {
                     || self.secondary_dns.has_errors())
     }
 
+    fn is_dirty(&self) -> bool {
+        self.ssid.is_dirty()
+            || self.hidden_ssid.is_dirty()
+            || self.auth.is_dirty()
+            || self.auth.value() != Some(AuthMethod::None)
+                && (self.password.is_dirty() || self.password_confirm.is_dirty())
+            || self.ip_conf_enabled.is_dirty()
+            || self.ip_conf_enabled.value() == Some(true)
+                && (self.dhcp_server_enabled.is_dirty()
+                    || self.subnet.is_dirty()
+                    || self.dns.is_dirty()
+                    || self.secondary_dns.is_dirty())
+    }
+
     fn get(&self) -> Option<AccessPointConfiguration> {
         if self.has_errors() {
             None
@@ -292,7 +306,7 @@ impl ApConfForm {
         }
     }
 
-    fn update(&self, conf: Option<&AccessPointConfiguration>) {
+    fn update(&mut self, conf: Option<&AccessPointConfiguration>) {
         let dconf = Default::default();
         let conf = conf.unwrap_or(&dconf);
 
@@ -590,6 +604,21 @@ impl StaConfForm {
                             || self.secondary_dns.has_errors()))
     }
 
+    fn is_dirty(&self) -> bool {
+        self.ssid.is_dirty()
+            || self.auth.is_dirty()
+            || self.auth.value() != Some(AuthMethod::None)
+                && (self.password.is_dirty() || self.password_confirm.is_dirty())
+            || self.ip_conf_enabled.is_dirty()
+            || self.ip_conf_enabled.value() == Some(true)
+                && (self.dhcp_enabled.is_dirty()
+                    || self.dhcp_enabled.value() != Some(true)
+                        && (self.subnet.is_dirty()
+                            || self.ip.is_dirty()
+                            || self.dns.is_dirty()
+                            || self.secondary_dns.is_dirty()))
+    }
+
     fn get(&self) -> Option<ClientConfiguration> {
         if self.has_errors() {
             None
@@ -620,7 +649,7 @@ impl StaConfForm {
         }
     }
 
-    fn update(&self, conf: Option<&ClientConfiguration>) {
+    fn update(&mut self, conf: Option<&ClientConfiguration>) {
         let dconf = Default::default();
         let conf = conf.unwrap_or(&dconf);
 

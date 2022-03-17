@@ -8,9 +8,9 @@ use super::util::*;
 
 #[derive(Clone)]
 pub struct Field<R, S> {
-    initial: R,
-    value_state: UseStateHandle<R>,
+    model_raw_value: Option<R>,
     raw_value: Rc<RefCell<Option<R>>>,
+    value_state: UseStateHandle<Option<R>>,
     converter: Callback2<Event, R>,
     validator: Callback2<R, Result<S, String>>,
 }
@@ -46,8 +46,8 @@ where
         validate: impl Fn(R) -> Result<S, String> + 'static,
     ) -> Self {
         Self {
-            initial: Default::default(),
-            value_state: use_state(|| Default::default()),
+            model_raw_value: None,
+            value_state: use_state(|| None),
             raw_value: Rc::new(RefCell::new(None)),
             converter: Callback2::from(converter),
             validator: Callback2::from(validate),
@@ -55,14 +55,11 @@ where
     }
 
     pub fn is_dirty(&self) -> bool {
-        self.has_errors() || self.raw_value() != self.initial
+        self.has_errors() || self.raw_value.borrow_mut().is_some() || self.value_state.is_some()
     }
 
-    pub fn update(&self, raw_value: R) {
-        if !self.is_dirty() {
-            *self.raw_value.borrow_mut() = Some(raw_value.clone());
-            self.value_state.set(raw_value);
-        }
+    pub fn update(&mut self, raw_value: R) {
+        self.model_raw_value = Some(raw_value);
     }
 
     pub fn value(&self) -> Option<S> {
@@ -70,10 +67,16 @@ where
     }
 
     pub fn raw_value(&self) -> R {
-        self.raw_value
-            .borrow()
-            .clone()
-            .unwrap_or((&*self.value_state).clone())
+        self.raw_value.borrow().clone().unwrap_or_else(|| {
+            self.value_state
+                .as_ref()
+                .map(|v| v.clone())
+                .unwrap_or_else(|| {
+                    self.model_raw_value
+                        .clone()
+                        .unwrap_or_else(|| Default::default())
+                })
+        })
     }
 
     pub fn has_errors(&self) -> bool {
@@ -101,6 +104,9 @@ where
     }
 
     pub fn on_change(&self, event: Event) {
-        self.update(self.converter.call(event));
+        let value = self.converter.call(event);
+
+        *self.raw_value.borrow_mut() = Some(value.clone());
+        self.value_state.set(Some(value));
     }
 }

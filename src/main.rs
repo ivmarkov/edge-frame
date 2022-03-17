@@ -24,7 +24,7 @@ impl AppState {
         //Default::default()
         Self {
             role: Rc::new(ValueState::new(RoleValue::Admin)),
-            wifi: Rc::new(Default::default()),
+            wifi: Rc::new(ValueState::new(Some(Default::default()))),
         }
     }
 
