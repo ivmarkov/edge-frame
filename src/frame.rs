@@ -64,12 +64,12 @@ pub fn nav_group(props: &NavGroupProps) -> Html {
 }
 
 #[derive(Properties, Clone, Default, Debug, PartialEq)]
-pub struct NavItemProps<R>
-where
-    R: Routable + Clone,
-{
-    /// The Switched item representing the route.
-    pub route: R,
+pub struct NavItemProps {
+    pub active: bool,
+
+    #[prop_or_default]
+    pub selected: Callback<()>,
+
     /// The text to display.
     #[prop_or_default]
     pub text: String,
@@ -79,28 +79,16 @@ where
 }
 
 #[function_component(NavItem)]
-pub fn nav_item<R>(props: &NavItemProps<R>) -> Html
-where
-    R: Routable + Clone + 'static,
-{
-    let history = use_history();
-    let route = use_route::<R>();
-
+pub fn nav_item(props: &NavItemProps) -> Html {
     let onclick = {
-        let route = props.route.clone();
+        let selected = props.selected.clone();
 
-        Callback::from(move |_| {
-            let history = history.clone();
-
-            if let Some(history) = history {
-                history.push(route.clone())
-            }
-        })
+        Callback::from(move |_| selected.emit(()))
     };
 
     html! {
         <a
-            class={classes!("navbar-item", if_true(Some(props.route.clone()) == route, "is-active"))}
+            class={classes!("navbar-item", if_true(props.active, "is-active"))}
             href="#"
             {onclick}
         >
@@ -123,6 +111,46 @@ where
 }
 
 #[derive(Properties, Clone, Default, Debug, PartialEq)]
+pub struct RouteNavItemProps<R>
+where
+    R: Routable + Clone,
+{
+    /// The Switched item representing the route.
+    pub route: R,
+    /// The text to display.
+    #[prop_or_default]
+    pub text: String,
+    /// The icon to display.
+    #[prop_or_default]
+    pub icon: Option<String>,
+}
+
+#[function_component(RouteNavItem)]
+pub fn route_nav_item<R>(props: &RouteNavItemProps<R>) -> Html
+where
+    R: Routable + Clone + 'static,
+{
+    let history = use_history();
+    let route = use_route::<R>();
+
+    let selected = {
+        let route = props.route.clone();
+
+        Callback::from(move |_| {
+            let history = history.clone();
+
+            if let Some(history) = history {
+                history.push(route.clone())
+            }
+        })
+    };
+
+    html! {
+        <NavItem text={props.text.clone()} icon={props.icon.clone()} active={route == Some(props.route.clone())} {selected}/>
+    }
+}
+
+#[derive(Properties, Clone, Default, Debug, PartialEq)]
 pub struct StatusProps {
     #[prop_or_default]
     pub children: Children,
@@ -138,43 +166,60 @@ pub fn status(props: &StatusProps) -> Html {
 }
 
 #[derive(Properties, Clone, Default, Debug, PartialEq)]
-pub struct StatusItemProps<R>
-where
-    R: Routable + Clone,
-{
-    /// The Switched item representing the route.
+pub struct StatusItemProps {
     #[prop_or_default]
-    pub route: Option<R>,
+    pub selected: Callback<()>,
     /// The icon to display.
     #[prop_or_default]
     pub icon: String,
 }
 
 #[function_component(StatusItem)]
-pub fn status_item<R>(props: &StatusItemProps<R>) -> Html
+pub fn status_item(props: &StatusItemProps) -> Html {
+    let onclick = {
+        let selected = props.selected.clone();
+
+        Callback::from(move |_| selected.emit(()))
+    };
+
+    html! {
+        <div class="icon is-large">
+            <i class={props.icon.clone()} {onclick}></i>
+        </div>
+    }
+}
+
+#[derive(Properties, Clone, Default, Debug, PartialEq)]
+pub struct RouteStatusItemProps<R>
+where
+    R: Routable + Clone,
+{
+    /// The Switched item representing the route.
+    pub route: R,
+    /// The icon to display.
+    #[prop_or_default]
+    pub icon: String,
+}
+
+#[function_component(RouteStatusItem)]
+pub fn route_status_item<R>(props: &RouteStatusItemProps<R>) -> Html
 where
     R: Routable + Clone + 'static,
 {
-    if let Some(route) = props.route.clone() {
-        let onclick = Callback::from(move |_| {
+    let selected = {
+        let route = props.route.clone();
+
+        Callback::from(move |_| {
             let history = use_history();
 
             if let Some(history) = history.as_ref() {
                 history.push(route.clone())
             }
-        });
+        })
+    };
 
-        html! {
-            <div class="icon is-large">
-                <i class={props.icon.clone()} {onclick}></i>
-            </div>
-        }
-    } else {
-        html! {
-            <div class="icon is-large">
-                <i class={props.icon.clone()}></i>
-            </div>
-        }
+    html! {
+        <StatusItem icon={props.icon.clone()} {selected}/>
     }
 }
 

@@ -10,10 +10,9 @@ use embedded_svc::ipv4::{self, DHCPClientSettings, RouterConfiguration, Subnet};
 use embedded_svc::wifi::{
     AccessPointConfiguration, AuthMethod, ClientConfiguration, Configuration,
 };
-use yew_router::hooks::use_route;
 
 use crate::field::*;
-use crate::frame::{NavItem, StatusItem};
+use crate::frame::{RouteNavItem, RouteStatusItem};
 use crate::redust::{use_projection, Projection, Reducible2, ValueAction, ValueState};
 use crate::util::*;
 
@@ -41,7 +40,7 @@ pub fn wifi_nav_item<R: Routable + PartialEq + Clone + 'static>(
     props: &WifiNavItemProps<R>,
 ) -> Html {
     html! {
-        <NavItem<R>
+        <RouteNavItem<R>
             text="Wifi"
             icon="fa-lg fa-solid fa-wifi"
             route={props.route.clone()}/>
@@ -59,7 +58,7 @@ pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Reducible2
     props: &WifiStatusItemProps<R, S>,
 ) -> Html {
     html! {
-        <StatusItem<R>
+        <RouteStatusItem<R>
             icon="fa-lg fa-solid fa-wifi"
             route={props.route.clone()}/>
     }

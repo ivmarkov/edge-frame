@@ -67,7 +67,7 @@ enum Routes {
     #[at("/wifi")]
     Wifi,
     #[at("/")]
-    Root,
+    Home,
 }
 
 #[function_component(App)]
@@ -93,7 +93,7 @@ fn render(route: &Routes) -> Html {
                 app_url="https://github.com/ivmarkov/edge-frame">
                 <Nav>
                     <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
-                        <NavItem<Routes> text="Home" route={Routes::Root}/>
+                        <RouteNavItem<Routes> text="Home" route={Routes::Home}/>
                     </Role<AppState>>
                     <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
                         <NavGroup text="Settings">
@@ -109,7 +109,7 @@ fn render(route: &Routes) -> Html {
                 <Content>
                     {
                         match route {
-                            Routes::Root => html! {
+                            Routes::Home => html! {
                                 {"Hello, world!"}
                             },
                             Routes::Wifi => html! {
