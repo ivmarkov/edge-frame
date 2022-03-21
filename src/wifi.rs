@@ -40,14 +40,11 @@ pub struct WifiNavItemProps<R: Routable + PartialEq + Clone + 'static> {
 pub fn wifi_nav_item<R: Routable + PartialEq + Clone + 'static>(
     props: &WifiNavItemProps<R>,
 ) -> Html {
-    let route = use_route::<R>();
-
     html! {
         <NavItem<R>
             text="Wifi"
             icon="fa-lg fa-solid fa-wifi"
-            route={props.route.clone()}
-            active={Some(props.route.clone()) == route}/>
+            route={props.route.clone()}/>
     }
 }
 

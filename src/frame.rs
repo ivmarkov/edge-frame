@@ -70,9 +70,6 @@ where
 {
     /// The Switched item representing the route.
     pub route: R,
-    /// Whether the component represents an active route.
-    #[prop_or_default]
-    pub active: bool,
     /// The text to display.
     #[prop_or_default]
     pub text: String,
@@ -87,6 +84,7 @@ where
     R: Routable + Clone + 'static,
 {
     let history = use_history();
+    let route = use_route::<R>();
 
     let onclick = {
         let route = props.route.clone();
@@ -102,7 +100,7 @@ where
 
     html! {
         <a
-            class={classes!("navbar-item", if_true(props.active, "is-active"))}
+            class={classes!("navbar-item", if_true(Some(props.route.clone()) == route, "is-active"))}
             href="#"
             {onclick}
         >
