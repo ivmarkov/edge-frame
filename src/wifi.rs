@@ -19,13 +19,13 @@ use crate::util::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Hash))]
-pub enum PluginBehavior {
+pub enum EditScope {
     STA,
     AP,
     Mixed,
 }
 
-impl Default for PluginBehavior {
+impl Default for EditScope {
     fn default() -> Self {
         Self::STA
     }
@@ -74,7 +74,7 @@ pub type WifiState = ValueState<Option<Configuration>>;
 #[derive(Properties, Clone, Debug, PartialEq)]
 pub struct WifiProps<R: Reducible2> {
     #[prop_or_default]
-    pub behavior: PluginBehavior,
+    pub edit_scope: EditScope,
 
     pub projection: Projection<R, WifiState, WifiAction>,
 }
@@ -93,21 +93,21 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
     let onclick = {
         let conf_store = conf_store.clone();
 
-        let ap_conf_form = ap_conf_form.clone();
         let sta_conf_form = sta_conf_form.clone();
+        let ap_conf_form = ap_conf_form.clone();
 
         Callback::from(move |_| {
-            let mut new_conf = Configuration::Mixed(Default::default(), Default::default());
-
-            if let Some(ap_conf) = ap_conf_form.get() {
-                *new_conf.as_ap_conf_mut() = ap_conf;
-            }
-
             if let Some(sta_conf) = sta_conf_form.get() {
-                *new_conf.as_client_conf_mut() = sta_conf;
-            }
+                if let Some(ap_conf) = ap_conf_form.get() {
+                    let mut new_conf: Configuration = Default::default();
 
-            conf_store.dispatch(ValueAction::Update(Some(new_conf)));
+                    let (sta, ap) = new_conf.as_mixed_conf_mut();
+                    *sta = sta_conf;
+                    *ap = ap_conf;
+
+                    conf_store.dispatch(ValueAction::Update(Some(new_conf)));
+                }
+            }
         })
     };
 
@@ -129,10 +129,10 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
                     <div class="tabs">
                         <ul>
                             <li class={if_true(*ap_active, "is-active")}>
-                                <a class={if_true(ap_conf_form.has_errors(), "has-text-danger")} href="#" onclick={switch.clone()}>{"Access Point"}</a>
+                                <a class={if_true(ap_conf_form.has_errors(), "has-text-danger")} href="#" onclick={switch.clone()}>{format!("Access Point{}", if ap_conf_form.is_dirty() { "*" } else { "" })}</a>
                             </li>
                             <li class={if_true(!*ap_active, "is-active")}>
-                                <a class={if_true(sta_conf_form.has_errors(), "has-text-danger")} href="#" onclick={switch}>{"Client"}</a>
+                                <a class={if_true(sta_conf_form.has_errors(), "has-text-danger")} href="#" onclick={switch}>{format!("Client{}", if sta_conf_form.is_dirty() { "*" } else { "" })}</a>
                             </li>
                         </ul>
                     </div>
@@ -152,13 +152,13 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
                     <div class="tile is-ancestor">
                         <div class="tile is-4 is-vertical is-parent">
                             <div class="tile is-child box">
-                                <p class={classes!("title", if_true(ap_conf_form.has_errors(), "is-danger"))}>{"Access Point"}</p>
+                                <p class={classes!("title", if_true(ap_conf_form.has_errors(), "is-danger"))}>{format!("Access Point{}", if ap_conf_form.is_dirty() { "*" } else { "" })}</p>
                                 {ap_conf_form.render(conf.is_none())}
                             </div>
                         </div>
                         <div class="tile is-4 is-vertical is-parent">
                             <div class="tile is-child box">
-                                <p class={classes!("title", if_true(sta_conf_form.has_errors(), "is-danger"))}>{"Client"}</p>
+                                <p class={classes!("title", if_true(sta_conf_form.has_errors(), "is-danger"))}>{format!("Client{}", if sta_conf_form.is_dirty() { "*" } else { "" })}</p>
                                 {sta_conf_form.render(conf.is_none())}
                             </div>
                         </div>

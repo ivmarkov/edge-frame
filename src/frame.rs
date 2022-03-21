@@ -24,7 +24,12 @@ pub fn nav(props: &NavProps) -> Html {
 
 #[derive(Properties, Clone, Default, Debug, PartialEq)]
 pub struct NavGroupProps {
-    pub title: String,
+    /// The text to display.
+    #[prop_or_default]
+    pub text: String,
+    /// The icon to display.
+    #[prop_or_default]
+    pub icon: Option<String>,
 
     #[prop_or_default]
     pub children: Children,
@@ -34,7 +39,22 @@ pub struct NavGroupProps {
 pub fn nav_group(props: &NavGroupProps) -> Html {
     html! {
         <div class="navbar-item has-dropdown is-hoverable">
-            <a href="#" class="navbar-link">{props.title.clone()}</a>
+            <a href="#" class="navbar-link">
+            {
+                if let Some(icon) = props.icon.as_ref() {
+                    html! {
+                        <div style="position:relative">
+                            <span class="icon"><i class={icon}></i></span>
+                            <span>{props.text.clone()}</span>
+                        </div>
+                    }
+                } else {
+                    html! {
+                        {props.text.clone()}
+                    }
+                }
+            }
+            </a>
 
             <div class="navbar-dropdown">
                 { for props.children.iter() }
@@ -70,11 +90,12 @@ where
 
     let onclick = {
         let route = props.route.clone();
-        let history = history.clone();
 
-        Callback::once(move |_| {
+        Callback::from(move |_| {
+            let history = history.clone();
+
             if let Some(history) = history {
-                history.push(route)
+                history.push(route.clone())
             }
         })
     };
@@ -137,17 +158,13 @@ where
     R: Routable + Clone + 'static,
 {
     if let Some(route) = props.route.clone() {
-        let history = use_history();
+        let onclick = Callback::from(move |_| {
+            let history = use_history();
 
-        let onclick = {
-            let history = history.clone();
-
-            Callback::once(move |_| {
-                if let Some(history) = history {
-                    history.push(route)
-                }
-            })
-        };
+            if let Some(history) = history.as_ref() {
+                history.push(route.clone())
+            }
+        });
 
         html! {
             <div class="icon is-large">

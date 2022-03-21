@@ -1,5 +1,6 @@
 #![recursion_limit = "1024"]
 
+use std::ops::Deref;
 use std::rc::Rc;
 
 use log::Level;
@@ -41,7 +42,7 @@ impl Reducible for AppState {
     type Action = AppAction;
 
     fn reduce(self: Rc<Self>, action: Self::Action) -> Rc<Self> {
-        let new = match action {
+        match action {
             AppAction::UpdateRole(action) => Self {
                 role: self.role.clone().reduce(action),
                 ..(&*self).clone()
@@ -50,9 +51,8 @@ impl Reducible for AppState {
                 wifi: self.wifi.clone().reduce(action),
                 ..(&*self).clone()
             },
-        };
-
-        new.into()
+        }
+        .into()
     }
 }
 
@@ -72,54 +72,61 @@ enum Routes {
 
 #[function_component(App)]
 fn app() -> Html {
-    wasm_logger::init(wasm_logger::Config::default());
+    let store = use_store(|| Rc::new(AppState::new())).apply(log(Level::Info));
 
-    let store = Store::new(use_reducer(|| AppState::new())).apply(log(Level::Info));
-
-    info!("Here!");
+    info!("store current: {:?}", store.deref());
 
     html! {
-        <ContextProvider<Store<AppState>> context={store.clone()}>
-            <Role<AppState> role={RoleValue::User} projection={AppState::role()} auth=true>
-                <Frame
-                    app_title="EDGE FRAME"
-                    app_url="https://github.com/ivmarkov/edge-frame">
-                    <Nav>
-                        <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
-                            <NavGroup title="Settings">
-                                <WifiNavItem<Routes> route={Routes::Wifi}/>
-                            </NavGroup>
-                        </Role<AppState>>
-                    </Nav>
-                    <Status>
-                        <Role<AppState> role={RoleValue::User} projection={AppState::role()}>
-                            <WifiStatusItem<Routes, AppState> route={Routes::Wifi} projection={AppState::wifi()}/>
-                        </Role<AppState>>
-                    </Status>
-                    <Content>
-                        <BrowserRouter>
-                            <Switch<Routes> render={Switch::render(render)}/>
-                        </BrowserRouter>
-                    </Content>
-                </Frame>
-            </Role<AppState>>
-        </ContextProvider<Store<AppState>>>
+        <ContextProvider<UseStoreHandle<AppState>> context={store.clone()}>
+            <BrowserRouter>
+                <Switch<Routes> render={Switch::render(render)}/>
+            </BrowserRouter>
+        </ContextProvider<UseStoreHandle<AppState>>>
     }
 }
 
 fn render(route: &Routes) -> Html {
-    match route {
-        Routes::Root => html! {
-            {"Hello, world!"}
-        },
-        Routes::Wifi => html! {
-            <Role<AppState> role={RoleValue::Admin} projection={AppState::role()} auth=true>
-                <Wifi<AppState> projection={AppState::wifi()}/>
-            </Role<AppState>>
-        },
+    html! {
+        <Role<AppState> role={RoleValue::User} projection={AppState::role()} auth=true>
+            <Frame
+                app_title="EDGE FRAME"
+                app_url="https://github.com/ivmarkov/edge-frame">
+                <Nav>
+                    <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
+                        <NavItem<Routes> text="Home" route={Routes::Root}/>
+                    </Role<AppState>>
+                    <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
+                        <NavGroup text="Settings">
+                            <WifiNavItem<Routes> route={Routes::Wifi}/>
+                        </NavGroup>
+                    </Role<AppState>>
+                </Nav>
+                <Status>
+                    <Role<AppState> role={RoleValue::User} projection={AppState::role()}>
+                        <WifiStatusItem<Routes, AppState> route={Routes::Wifi} projection={AppState::wifi()}/>
+                    </Role<AppState>>
+                </Status>
+                <Content>
+                    {
+                        match route {
+                            Routes::Root => html! {
+                                {"Hello, world!"}
+                            },
+                            Routes::Wifi => html! {
+                                <Role<AppState> role={RoleValue::Admin} projection={AppState::role()} auth=true>
+                                    <Wifi<AppState> projection={AppState::wifi()}/>
+                                </Role<AppState>>
+                            },
+                        }
+                    }
+                </Content>
+            </Frame>
+        </Role<AppState>>
     }
 }
 
 fn main() {
+    wasm_logger::init(wasm_logger::Config::default());
+
     yew::start_app::<App>();
 }

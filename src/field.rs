@@ -55,7 +55,9 @@ where
     }
 
     pub fn is_dirty(&self) -> bool {
-        self.has_errors() || self.raw_value.borrow_mut().is_some() || self.value_state.is_some()
+        self.has_errors()
+            || self.raw_value.borrow_mut().is_some()
+            || self.value_state.is_some() && *self.value_state != self.model_raw_value
     }
 
     pub fn update(&mut self, raw_value: R) {

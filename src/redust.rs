@@ -1,24 +1,14 @@
-use std::{fmt::Debug, ops::Deref, ptr, rc::Rc};
+use std::{
+    cell::{Ref, RefCell},
+    fmt::Debug,
+    ops::Deref,
+    ptr,
+    rc::Rc,
+};
 
 use log::{log, Level};
-use yew::{use_context, Reducible, UseReducerHandle};
 
-pub trait StoreHandle: Deref {
-    type Action;
-
-    fn dispatch(&self, action: Self::Action);
-}
-
-impl<R> StoreHandle for UseReducerHandle<R>
-where
-    R: Reducible,
-{
-    type Action = R::Action;
-
-    fn dispatch(&self, action: Self::Action) {
-        UseReducerHandle::dispatch(self, action)
-    }
-}
+use yew::{use_context, use_mut_ref, use_state, Reducible, UseStateHandle};
 
 pub struct Projection<R, P, A>
 where
@@ -84,30 +74,19 @@ where
     R: Reducible,
 {
     projection: Projection<R, P, A>,
-    store: Store<R>,
+    store: UseStoreHandle<R>,
 }
 
 impl<R, P, A> UseProjectionHandle<R, P, A>
 where
-    R: Reducible,
+    R: Reducible + 'static,
 {
-    fn new(projection: Projection<R, P, A>, store: Store<R>) -> Self {
+    fn new(projection: Projection<R, P, A>, store: UseStoreHandle<R>) -> Self {
         Self { projection, store }
     }
 
     pub fn dispatch(&self, action: A) {
         self.store.dispatch((self.projection.action_mapper)(action))
-    }
-}
-
-impl<R, P, A> StoreHandle for UseProjectionHandle<R, P, A>
-where
-    R: Reducible,
-{
-    type Action = A;
-
-    fn dispatch(&self, action: A) {
-        UseProjectionHandle::dispatch(self, action)
     }
 }
 
@@ -136,91 +115,132 @@ where
 
 pub fn use_projection<R, P, A>(projection: Projection<R, P, A>) -> UseProjectionHandle<R, P, A>
 where
-    R: Reducible2,
+    R: Reducible + PartialEq + 'static,
 {
     UseProjectionHandle::new(
         projection,
-        use_context::<Store<R>>().expect("No Store context found"),
+        use_context::<UseStoreHandle<R>>().expect("No Store context found"),
     )
 }
 
-pub struct Store<R>
+pub struct StoreProvider<R>(UseStoreHandle<R>)
+where
+    R: Reducible;
+
+impl<R> StoreProvider<R>
 where
     R: Reducible,
 {
-    store: UseReducerHandle<R>,
-    middleware: Rc<dyn Fn(&dyn StoreHandle<Target = R, Action = R::Action>, R::Action)>,
+    pub fn get(&self) -> Ref<'_, Rc<R>> {
+        self.0.current.borrow()
+    }
 }
 
-impl<R> Store<R>
+impl<R> Clone for StoreProvider<R>
 where
     R: Reducible,
 {
-    pub fn new(store: UseReducerHandle<R>) -> Self {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+pub fn use_store<R>(initial_value: impl FnOnce() -> Rc<R> + Clone) -> UseStoreHandle<R>
+where
+    R: Reducible + 'static,
+{
+    UseStoreHandle::new(use_mut_ref(initial_value.clone()), use_state(initial_value))
+}
+
+pub struct UseStoreHandle<R>
+where
+    R: Reducible,
+{
+    current: Rc<RefCell<Rc<R>>>,
+    state: UseStateHandle<Rc<R>>,
+    dispatcher: Rc<dyn Fn(StoreProvider<R>, R::Action)>,
+}
+
+impl<R> UseStoreHandle<R>
+where
+    R: Reducible + 'static,
+{
+    fn new(current: Rc<RefCell<Rc<R>>>, state: UseStateHandle<Rc<R>>) -> Self {
         Self {
-            store,
-            middleware: Rc::new(|store, action| store.dispatch(action)),
+            current,
+            state,
+            dispatcher: Rc::new(|store, action| {
+                let old_state = store.0.current.borrow().clone();
+                let new_state = old_state.reduce(action);
+
+                *store.0.current.borrow_mut() = new_state.clone();
+                store.0.state.set(new_state);
+            }),
         }
+    }
+
+    pub fn dispatch(&self, action: R::Action) {
+        let store = (*self).clone();
+
+        (self.dispatcher)(StoreProvider(store), action);
     }
 
     pub fn apply(
         self,
-        middleware: impl Fn(&dyn StoreHandle<Target = R, Action = R::Action>, R::Action) + 'static,
+        middleware: impl Fn(StoreProvider<R>, R::Action, Rc<dyn Fn(StoreProvider<R>, R::Action)>)
+            + 'static,
     ) -> Self
     where
         R: 'static,
     {
+        let dispatcher = self.dispatcher;
+
         Self {
-            store: self.store, // TODO XXX FIXME
-            middleware: Rc::new(middleware),
+            current: self.current.clone(),
+            state: self.state.clone(),
+            dispatcher: Rc::new(move |store, action| {
+                middleware(store, action, dispatcher.clone());
+            }),
         }
     }
 }
 
-impl<R> StoreHandle for Store<R>
-where
-    R: Reducible,
-{
-    type Action = R::Action;
-
-    fn dispatch(&self, action: Self::Action) {
-        (self.middleware)(&self.store, action)
-    }
-}
-
-impl<R> Deref for Store<R>
+impl<R> Deref for UseStoreHandle<R>
 where
     R: Reducible,
 {
     type Target = R;
 
     fn deref(&self) -> &Self::Target {
-        &self.store
+        self.state.deref()
     }
 }
 
-impl<R> Clone for Store<R>
+impl<R> Clone for UseStoreHandle<R>
 where
     R: Reducible,
 {
     fn clone(&self) -> Self {
         Self {
-            store: self.store.clone(),
-            middleware: self.middleware.clone(),
+            current: self.current.clone(),
+            state: self.state.clone(),
+            dispatcher: self.dispatcher.clone(),
         }
     }
 }
 
-impl<R> PartialEq for Store<R>
+impl<R> PartialEq for UseStoreHandle<R>
 where
     R: Reducible + PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.store == other.store && &*self.middleware as *const _ == &*other.middleware as *const _
+        self.current == other.current
+            && self.state == other.state
+            && &*self.dispatcher as *const _ == &*other.dispatcher as *const _
     }
 }
 
-impl<R> Debug for Store<R>
+impl<R> Debug for UseStoreHandle<R>
 where
     R: Reducible + Debug,
 {
@@ -231,33 +251,33 @@ where
 
 pub fn log<R: Reducible>(
     level: Level,
-) -> impl Fn(&dyn StoreHandle<Target = R, Action = R::Action>, R::Action)
+) -> impl Fn(StoreProvider<R>, R::Action, Rc<dyn Fn(StoreProvider<R>, R::Action)>)
 where
-    R: Debug,
+    R: Clone + Debug,
     R::Action: Debug,
 {
-    move |store, action| {
+    move |store, action, dispatcher| {
         log!(
             level,
             "BEFORE: Store: {:?}, action: {:?}",
-            store.deref(),
+            store.get().deref(),
             action
         );
 
-        store.dispatch(action);
+        dispatcher(store.clone(), action);
 
-        log!(level, "AFTER: Store: {:?}", store.deref());
+        log!(level, "AFTER: Store: {:?}", store.get().deref());
     }
 }
 
-pub trait Reducible2: Reducible + Clone + PartialEq + 'static
+pub trait Reducible2: Reducible + PartialEq + 'static
 /*where <Self as Reducible>::Action: PartialEq + 'static*/
 {
 }
 
 impl<T> Reducible2 for T
 where
-    T: Reducible + Clone + PartialEq + 'static,
+    T: Reducible + PartialEq + 'static,
     T::Action: PartialEq + 'static,
 {
 }
