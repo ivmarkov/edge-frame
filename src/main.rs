@@ -1,11 +1,9 @@
 #![recursion_limit = "1024"]
 
-use std::ops::Deref;
 use std::rc::Rc;
 
 use log::Level;
 
-use log::info;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
@@ -24,7 +22,7 @@ impl AppState {
     pub fn new() -> Self {
         //Default::default()
         Self {
-            role: Rc::new(ValueState::new(RoleValue::Admin)),
+            role: Rc::new(ValueState::new(RoleStateValue::Role(RoleValue::Admin))),
             wifi: Rc::new(ValueState::new(Some(Default::default()))),
         }
     }
@@ -73,8 +71,6 @@ enum Routes {
 #[function_component(App)]
 fn app() -> Html {
     let store = use_store(|| Rc::new(AppState::new())).apply(log(Level::Info));
-
-    info!("store current: {:?}", store.deref());
 
     html! {
         <ContextProvider<UseStoreHandle<AppState>> context={store.clone()}>

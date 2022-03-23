@@ -29,8 +29,8 @@ web-sys = { version = "0.3", features = ["console"] }
 yew = { version = "0.19", default-features = false }
 yew-router = { version = "0.16" }
 strum = { version = "0.23" }
-embedded-svc = { version = "0.17.3", features = ["experimental"] }
-derivative = "2.2"
+embedded-svc = { version = "0.17.4", features = ["experimental"] }
+
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
 # all the `std::fmt` and `std::panicking` infrastructure, so it's only enabled

@@ -7,5 +7,3 @@ pub mod redust;
 pub mod role;
 pub mod util;
 pub mod wifi;
-
-extern crate derivative;
