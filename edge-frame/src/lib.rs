@@ -7,7 +7,11 @@
         feature = "web",
         any(feature = "assets-register", feature = "assets-prepare")
     ),
-    not(any(feature = "web", feature = "assets-register", feature = "assets-prepare"))
+    not(any(
+        feature = "web",
+        feature = "assets-register",
+        feature = "assets-prepare"
+    ))
 ))]
 compile_error!(
     "Exactly one of the features `web', `assets-register` or `assets-prepare` must be selected."
