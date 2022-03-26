@@ -3,6 +3,7 @@
 ## Try it out
 
 * `cargo install trunk`
+* `cd kitchen-sink`
 * `trunk serve`
 
 ... more to come.

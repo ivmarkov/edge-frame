@@ -64,6 +64,8 @@ pub enum AppAction {
 enum Routes {
     #[at("/wifi")]
     Wifi,
+    #[at("/authstate")]
+    AuthState,
     #[at("/")]
     Home,
 }
@@ -73,7 +75,7 @@ fn app() -> Html {
     let store = use_store(|| Rc::new(AppState::new())).apply(log(Level::Info));
 
     html! {
-        <ContextProvider<UseStoreHandle<AppState>> context={store.clone()}>
+        <ContextProvider<UseStoreHandle<AppState>> context={store}>
             <BrowserRouter>
                 <Switch<Routes> render={Switch::render(render)}/>
             </BrowserRouter>
@@ -83,41 +85,45 @@ fn app() -> Html {
 
 fn render(route: &Routes) -> Html {
     html! {
-        <Role<AppState> role={RoleValue::User} projection={AppState::role()} auth=true>
-            <Frame
-                app_title="EDGE FRAME"
-                app_url="https://github.com/ivmarkov/edge-frame">
-                <Nav>
-                    <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
-                        <RouteNavItem<Routes> text="Home" route={Routes::Home}/>
-                    </Role<AppState>>
-                    <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
-                        <NavGroup text="Settings">
-                            <WifiNavItem<Routes> route={Routes::Wifi}/>
-                        </NavGroup>
-                    </Role<AppState>>
-                </Nav>
-                <Status>
-                    <Role<AppState> role={RoleValue::User} projection={AppState::role()}>
-                        <WifiStatusItem<Routes, AppState> route={Routes::Wifi} projection={AppState::wifi()}/>
-                    </Role<AppState>>
-                </Status>
-                <Content>
-                    {
-                        match route {
-                            Routes::Home => html! {
+        <Frame
+            app_title="EDGE FRAME"
+            app_url="https://github.com/ivmarkov/edge-frame">
+            <Nav>
+                <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
+                    <RouteNavItem<Routes> text="Home" route={Routes::Home}/>
+                </Role<AppState>>
+                <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
+                    <NavGroup text="Settings">
+                        <WifiNavItem<Routes> route={Routes::Wifi}/>
+                    </NavGroup>
+                </Role<AppState>>
+            </Nav>
+            <Status>
+                <Role<AppState> role={RoleValue::User} projection={AppState::role()}>
+                    <WifiStatusItem<Routes, AppState> route={Routes::Wifi} projection={AppState::wifi()}/>
+                </Role<AppState>>
+                <RoleLogoutStatusItem<Routes, AppState> auth_status_route={Routes::AuthState} projection={AppState::role()}/>
+            </Status>
+            <Content>
+                {
+                    match route {
+                        Routes::Home => html! {
+                            <Role<AppState> role={RoleValue::User} projection={AppState::role()} auth=true>
                                 {"Hello, world!"}
-                            },
-                            Routes::Wifi => html! {
-                                <Role<AppState> role={RoleValue::Admin} projection={AppState::role()} auth=true>
-                                    <Wifi<AppState> projection={AppState::wifi()}/>
-                                </Role<AppState>>
-                            },
-                        }
+                            </Role<AppState>>
+                        },
+                        Routes::AuthState => html! {
+                            <RoleAuthState<AppState> projection={AppState::role()}/>
+                        },
+                        Routes::Wifi => html! {
+                            <Role<AppState> role={RoleValue::Admin} projection={AppState::role()} auth=true>
+                                <Wifi<AppState> projection={AppState::wifi()}/>
+                            </Role<AppState>>
+                        },
                     }
-                </Content>
-            </Frame>
-        </Role<AppState>>
+                }
+            </Content>
+        </Frame>
     }
 }
 

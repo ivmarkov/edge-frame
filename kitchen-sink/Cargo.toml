@@ -1,0 +1,30 @@
+#cargo-features = ["per-package-target"]
+
+[package]
+name = "kitchen-sink"
+version = "0.1.0"
+authors = ["Ivan Markov <ivan.markov@gmail.com>"]
+edition = "2018"
+resolver = "2"
+categories = ["embedded", "hardware-support", "ui"]
+keywords = ["ui", "embedded", "frame", "yew", "wasm", "trunk", "svc"]
+description = "Yew & Wasm-based user interface for microcontrollers."
+repository = "https://github.com/ivmarkov/edge-frame"
+license = "MIT OR Apache-2.0"
+#forced-target = "wasm32-unknown-unknown"
+
+[dependencies]
+anyhow = "1"
+log = "0.4"
+derive_more = "0.99"
+wasm-logger = "0.2"
+yew = { version = "0.19", default-features = false }
+yew-router = { version = "0.16" }
+edge-frame = { path = "../edge-frame" }
+
+# The `console_error_panic_hook` crate provides better debugging of panics by
+# logging them with `console.error`. This is great for development, but requires
+# all the `std::fmt` and `std::panicking` infrastructure, so it's only enabled
+# in debug mode.
+#[target."cfg(debug_assertions)".dependencies]
+#console_error_panic_hook = "0.1"

@@ -125,10 +125,10 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
                     <div class="tabs">
                         <ul>
                             <li class={if_true(*ap_active, "is-active")}>
-                                <a class={if_true(ap_conf_form.has_errors(), "has-text-danger")} href="#" onclick={switch.clone()}>{format!("Access Point{}", if ap_conf_form.is_dirty() { "*" } else { "" })}</a>
+                                <a class={if_true(ap_conf_form.has_errors(), "has-text-danger")} href="javascript:void(0);" onclick={switch.clone()}>{format!("Access Point{}", if ap_conf_form.is_dirty() { "*" } else { "" })}</a>
                             </li>
                             <li class={if_true(!*ap_active, "is-active")}>
-                                <a class={if_true(sta_conf_form.has_errors(), "has-text-danger")} href="#" onclick={switch}>{format!("Client{}", if sta_conf_form.is_dirty() { "*" } else { "" })}</a>
+                                <a class={if_true(sta_conf_form.has_errors(), "has-text-danger")} href="javascript:void(0);" onclick={switch}>{format!("Client{}", if sta_conf_form.is_dirty() { "*" } else { "" })}</a>
                             </li>
                         </ul>
                     </div>
@@ -213,7 +213,7 @@ impl ApConfForm {
             auth: Field::text(|raw_value| {
                 Ok(AuthMethod::iter()
                     .find(|auth| auth.to_string() == raw_value)
-                    .unwrap_or(Default::default()))
+                    .unwrap_or_default())
             }),
             password: password.clone(),
             password_confirm: Field::text(move |raw_text| {
@@ -284,7 +284,7 @@ impl ApConfForm {
                 ssid_hidden: self.hidden_ssid.value().unwrap(),
 
                 auth_method: self.auth.value().unwrap(),
-                password: self.password.value().unwrap_or_else(|| String::new()),
+                password: self.password.value().unwrap_or_default(),
 
                 ip_conf: if self.ip_conf_enabled.value().unwrap() {
                     Some(RouterConfiguration {
@@ -320,17 +320,17 @@ impl ApConfForm {
         self.subnet.update(
             conf.ip_conf
                 .map(|i| i.subnet.to_string())
-                .unwrap_or_else(|| String::new()),
+                .unwrap_or_default(),
         );
         self.dns.update(
             conf.ip_conf
                 .and_then(|i| i.dns.map(|d| d.to_string()))
-                .unwrap_or_else(|| String::new()),
+                .unwrap_or_default(),
         );
         self.secondary_dns.update(
             conf.ip_conf
                 .and_then(|i| i.secondary_dns.map(|d| d.to_string()))
-                .unwrap_or_else(|| String::new()),
+                .unwrap_or_default(),
         );
     }
 
@@ -547,7 +547,7 @@ impl StaConfForm {
             auth: Field::text(|raw_value| {
                 Ok(AuthMethod::iter()
                     .find(|auth| auth.to_string() == raw_value)
-                    .unwrap_or(Default::default()))
+                    .unwrap_or_default())
             }),
             password: password.clone(),
             password_confirm: Field::text(move |raw_text| {
@@ -623,7 +623,7 @@ impl StaConfForm {
                 ssid: self.ssid.value().unwrap(),
 
                 auth_method: self.auth.value().unwrap(),
-                password: self.password.value().unwrap_or_else(|| String::new()),
+                password: self.password.value().unwrap_or_default(),
 
                 ip_conf: if self.ip_conf_enabled.value().unwrap() {
                     Some(if self.dhcp_enabled.value().unwrap() {
@@ -666,12 +666,12 @@ impl StaConfForm {
         self.subnet.update(
             conf.as_ip_conf_ref()
                 .and_then(|i| i.as_fixed_settings_ref().map(|i| i.subnet.to_string()))
-                .unwrap_or_else(|| String::new()),
+                .unwrap_or_default(),
         );
         self.ip.update(
             conf.as_ip_conf_ref()
                 .and_then(|i| i.as_fixed_settings_ref().map(|i| i.ip.to_string()))
-                .unwrap_or_else(|| String::new()),
+                .unwrap_or_default(),
         );
         self.dns.update(
             conf.as_ip_conf_ref()
@@ -679,7 +679,7 @@ impl StaConfForm {
                     i.as_fixed_settings_ref()
                         .and_then(|i| i.dns.map(|d| d.to_string()))
                 })
-                .unwrap_or_else(|| String::new()),
+                .unwrap_or_default(),
         );
         self.secondary_dns.update(
             conf.as_ip_conf_ref()
@@ -687,7 +687,7 @@ impl StaConfForm {
                     i.as_fixed_settings_ref()
                         .and_then(|i| i.secondary_dns.map(|d| d.to_string()))
                 })
-                .unwrap_or_else(|| String::new()),
+                .unwrap_or_default(),
         );
     }
 

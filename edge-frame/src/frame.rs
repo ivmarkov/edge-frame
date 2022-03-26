@@ -39,7 +39,7 @@ pub struct NavGroupProps {
 pub fn nav_group(props: &NavGroupProps) -> Html {
     html! {
         <div class="navbar-item has-dropdown is-hoverable">
-            <a href="#" class="navbar-link">
+            <a href="javascript:void(0);" class="navbar-link">
             {
                 if let Some(icon) = props.icon.as_ref() {
                     html! {
@@ -89,7 +89,7 @@ pub fn nav_item(props: &NavItemProps) -> Html {
     html! {
         <a
             class={classes!("navbar-item", if_true(props.active, "is-active"))}
-            href="#"
+            href="javascript:void(0);"
             {onclick}
         >
         {
@@ -213,7 +213,7 @@ where
             let history = use_history();
 
             if let Some(history) = history.as_ref() {
-                history.push(route.clone())
+                history.push(route.clone());
             }
         })
     };
@@ -294,7 +294,7 @@ pub fn frame(props: &FrameProps) -> Html {
                     }
                 }
 
-                <a href="#" role="button" class={classes!("navbar-burger", if_true(*open, "is-active"))} aria-label="menu" aria-expanded="false" data-target="navbar">
+                <a href="javascript:void(0);" role="button" class={classes!("navbar-burger", if_true(*open, "is-active"))} aria-label="menu" aria-expanded="false" data-target="navbar">
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>

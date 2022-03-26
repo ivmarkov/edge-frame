@@ -70,14 +70,11 @@ where
 
     pub fn raw_value(&self) -> R {
         self.raw_value.borrow().clone().unwrap_or_else(|| {
-            self.value_state
-                .as_ref()
-                .map(|v| v.clone())
-                .unwrap_or_else(|| {
-                    self.model_raw_value
-                        .clone()
-                        .unwrap_or_else(|| Default::default())
-                })
+            self.value_state.as_ref().cloned().unwrap_or_else(|| {
+                self.model_raw_value
+                    .clone()
+                    .unwrap_or_else(|| Default::default())
+            })
         })
     }
 

@@ -51,11 +51,11 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         ptr::eq(
-            &*self.state_mapper as *const _,
-            &*other.state_mapper as *const _,
+            &*self.state_mapper as *const _ as *const u8,
+            &*other.state_mapper as *const _ as *const u8,
         ) && ptr::eq(
-            &*self.action_mapper as *const _,
-            &*other.action_mapper as *const _,
+            &*self.action_mapper as *const _ as *const u8,
+            &*other.action_mapper as *const _ as *const u8,
         )
     }
 }
@@ -236,7 +236,10 @@ where
     fn eq(&self, other: &Self) -> bool {
         self.current == other.current
             && self.state == other.state
-            && &*self.dispatcher as *const _ == &*other.dispatcher as *const _
+            && ptr::eq(
+                &*self.dispatcher as *const _ as *const u8,
+                &*other.dispatcher as *const _ as *const u8,
+            )
     }
 }
 

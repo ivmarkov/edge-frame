@@ -1,0 +1,30 @@
+[package]
+name = "edge-frame"
+version = "0.1.0"
+authors = ["Ivan Markov <ivan.markov@gmail.com>"]
+edition = "2018"
+resolver = "2"
+categories = ["embedded", "hardware-support", "ui"]
+keywords = ["ui", "embedded", "frame", "yew", "wasm", "trunk", "svc"]
+description = "Yew & Wasm-based user interface for microcontrollers."
+repository = "https://github.com/ivmarkov/edge-frame"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = ["web", "wee_alloc"]
+web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "strum", "embedded-svc", "embedded-svc/std", "embedded-svc/use_serde", "embedded-svc/use_strum", "embedded-svc/use_numenum"]
+assets-serve = ["embedded-svc", "embedded-svc/alloc", "embedded-svc/experimental"]
+assets-prepare = ["anyhow", "flate2"]
+
+[dependencies]
+anyhow = { version = "1", optional = true }
+log = { version = "0.4", optional = true }
+derive_more = { version = "0.99", optional = true }
+wasm-logger = { version = "0.2", optional = true }
+wee_alloc = { version = "0.4", optional = true }
+web-sys = { version = "0.3", optional = true, features = ["console"] }
+yew = { version = "0.19", optional = true, default-features = false }
+yew-router = { version = "0.16", optional = true }
+strum = { version = "0.23", optional = true }
+embedded-svc = { version = "0.17.5", optional = true, default-features = false }
+flate2 = { version = "1", optional = true }

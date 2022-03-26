@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  schedule:
+    - cron: '50 4 * * *'
+
+jobs:
+  compile:
+    name: Compile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v2
+      - name: Setup | Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: rustfmt, clippy
+#      - name: Setup | Std
+#        run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+      - name: Setup | Default to nightly
+        run: rustup default nightly
+      - name: Setup | Trunk
+        run: cargo install trunk
+      - name: Build | Fmt Check
+        run: cargo fmt -- --check
+      - name: Build | Clippy
+        run: cargo clippy --no-deps --target wasm32-unknown-unknown -- -Dwarnings
+      - name: Build | Compile / assets-prepare
+        run: cargo build --no-default-features --features assets-prepare
+      - name: Build | Compile / assets-serve
+        run: cargo build --no-default-features --features assets-serve
+      - name: Build | Trunk
+        run: cd kitchen-sink; trunk build
