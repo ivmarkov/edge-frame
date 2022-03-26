@@ -81,21 +81,26 @@ pub mod serve {
     {
         let uri = if content_metadata.root { "" } else { name };
 
-        httpd.at(format!("/{}", uri)).inline().get(|req, resp| {
-            if let Some(cache_control) = content_metadata.cache_control {
-                resp.header("Cache-Control", cache_control);
-            }
+        httpd
+            .at(format!("/{}", uri))
+            .inline()
+            .get(move |req, mut resp| {
+                if let Some(cache_control) = &content_metadata.cache_control {
+                    resp.set_header("Cache-Control", cache_control.clone());
+                }
 
-            if let Some(content_encoding) = content_metadata.content_encoding {
-                resp.header("Content-Encoding", content_encoding);
-            }
+                if let Some(content_encoding) = &content_metadata.content_encoding {
+                    resp.set_header("Content-Encoding", content_encoding.clone());
+                }
 
-            if let Some(content_type) = content_metadata.content_type {
-                resp.header("Content-Type", content_type);
-            }
+                if let Some(content_type) = &content_metadata.content_type {
+                    resp.set_header("Content-Type", content_type.clone());
+                }
 
-            resp.send_bytes(req, data)
-        })?;
+                Result::<_, anyhow::Error>::Ok(
+                    resp.send_bytes(req, data).map_err(|e| anyhow::anyhow!(e))?,
+                )
+            })?;
 
         Ok(())
     }
@@ -118,7 +123,7 @@ pub mod serve {
                 "public, max-age=31536000"
             });
 
-            let split = name.split('.');
+            let mut split = name.split('.');
 
             let suffix = split.next_back().unwrap_or("");
 
