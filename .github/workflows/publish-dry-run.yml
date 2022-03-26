@@ -19,5 +19,7 @@ jobs:
           toolchain: ${{ env.rust_toolchain }}
       - name: Setup | Default to nightly
         run: rustup default ${{ env.rust_toolchain }}
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
       - name: Build | Publish Dry Run
         run: cd edge-frame; cargo publish --dry-run --target wasm32-unknown-unknown

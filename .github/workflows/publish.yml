@@ -19,6 +19,8 @@ jobs:
           toolchain: ${{ env.rust_toolchain }}
       - name: Setup | Default to nightly
         run: rustup default ${{ env.rust_toolchain }}
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
       - name: Login
         run: cargo login ${{ secrets.crates_io_token }}
       - name: Build | Publish

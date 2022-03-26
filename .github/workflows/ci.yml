@@ -25,15 +25,17 @@ jobs:
           components: rustfmt, clippy
       - name: Setup | Default to nightly
         run: rustup default ${{ env.rust_toolchain }}
-      - name: Setup | Trunk
-        run: cargo install trunk
       - name: Build | Fmt Check
         run: cargo fmt -- --check
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
       - name: Build | Clippy
         run: cargo clippy --no-deps --target wasm32-unknown-unknown -- -Dwarnings
       - name: Build | Compile / assets-prepare
         run: cargo build --no-default-features --features assets-prepare
       - name: Build | Compile / assets-serve
         run: cargo build --no-default-features --features assets-serve
+      - name: Setup | Trunk
+        run: cargo install trunk
       - name: Build | Trunk
         run: cd kitchen-sink; trunk build
