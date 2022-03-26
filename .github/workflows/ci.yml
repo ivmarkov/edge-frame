@@ -32,9 +32,9 @@ jobs:
       - name: Build | Clippy
         run: cargo clippy --no-deps --target wasm32-unknown-unknown -- -Dwarnings
       - name: Build | Compile / assets-prepare
-        run: cargo build --no-default-features --features assets-prepare
+        run: cd edge-frame; cargo build --no-default-features --features assets-prepare
       - name: Build | Compile / assets-serve
-        run: cargo build --no-default-features --features assets-serve
+        run: cd edge-frame; cargo build --no-default-features --features assets-serve
       - name: Setup | Trunk
         run: cargo install trunk
       - name: Build | Trunk
