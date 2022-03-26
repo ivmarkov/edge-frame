@@ -1,6 +1,6 @@
 const MAX_ASSETS: usize = 10;
 
-#[cfg(feature = "assets-register")]
+#[cfg(feature = "assets-serve")]
 pub mod serve {
     use core::result::Result;
 
@@ -12,56 +12,63 @@ pub mod serve {
     use embedded_svc::http::server::Response;
     use embedded_svc::http::SendHeaders;
 
-    #[cfg(feature = "assets-serve")]
-    const ASSETS: [(&'static str, &'static [u8]); super::MAX_ASSETS] = [
-        (
-            env!("EDGE_FRAME_ASSET_0_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_0_DATA")),
-        ),
-        (
-            env!("EDGE_FRAME_ASSET_1_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_1_DATA")),
-        ),
-        (
-            env!("EDGE_FRAME_ASSET_2_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_2_DATA")),
-        ),
-        (
-            env!("EDGE_FRAME_ASSET_3_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_3_DATA")),
-        ),
-        (
-            env!("EDGE_FRAME_ASSET_4_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_4_DATA")),
-        ),
-        (
-            env!("EDGE_FRAME_ASSET_5_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_5_DATA")),
-        ),
-        (
-            env!("EDGE_FRAME_ASSET_6_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_6_DATA")),
-        ),
-        (
-            env!("EDGE_FRAME_ASSET_7_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_7_DATA")),
-        ),
-        (
-            env!("EDGE_FRAME_ASSET_8_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_8_DATA")),
-        ),
-        (
-            env!("EDGE_FRAME_ASSET_9_NAME"),
-            include_bytes!(env!("EDGE_FRAME_ASSET_9_DATA")),
-        ),
-    ];
+    pub type Asset = (&'static str, &'static [u8]);
 
-    #[cfg(feature = "assets-serve")]
-    pub fn register<R>(httpd: &mut R) -> Result<(), R::Error>
+    pub type Assets = [Asset; super::MAX_ASSETS];
+
+    #[macro_export]
+    macro_rules! assets {
+        ($module:literal) => {
+            [
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_0")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_0"))),
+                ),
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_1")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_1"))),
+                ),
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_2")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_2"))),
+                ),
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_3")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_3"))),
+                ),
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_4")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_4"))),
+                ),
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_5")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_5"))),
+                ),
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_6")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_6"))),
+                ),
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_7")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_7"))),
+                ),
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_8")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_8"))),
+                ),
+                (
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_9")),
+                    include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_9"))),
+                ),
+            ]
+        };
+    }
+
+    pub fn register<R>(httpd: &mut R, assets: &[Asset]) -> Result<(), R::Error>
     where
         R: Registry,
     {
-        for (name, data) in ASSETS {
+        for (name, data) in assets {
             if !name.is_empty() && !data.is_empty() {
                 register_asset(httpd, name, data, ContentMetadata::derive(name))?;
             }
@@ -72,13 +79,15 @@ pub mod serve {
 
     pub fn register_asset<R>(
         httpd: &mut R,
-        name: &str,
+        name: impl AsRef<str>,
         data: &'static [u8],
         content_metadata: ContentMetadata<'static>,
     ) -> Result<(), R::Error>
     where
         R: Registry,
     {
+        let name = name.as_ref();
+
         let uri = if content_metadata.root { "" } else { name };
 
         httpd
@@ -113,7 +122,9 @@ pub mod serve {
     }
 
     impl<'a> ContentMetadata<'a> {
-        pub fn derive(name: &str) -> ContentMetadata<'static> {
+        pub fn derive(name: impl AsRef<str>) -> ContentMetadata<'static> {
+            let name = name.as_ref();
+
             let root = name.eq_ignore_ascii_case("index.html")
                 || name.eq_ignore_ascii_case("index.html.gz");
 
@@ -172,11 +183,15 @@ pub mod prepare {
     use anyhow;
     use flate2::{write::GzEncoder, Compression};
 
-    pub fn run(assets_dir: &Path) -> anyhow::Result<()> {
+    pub fn run(module: impl AsRef<str>, assets_dir: impl AsRef<Path>) -> anyhow::Result<()> {
+        let module = module.as_ref();
+        let assets_dir = assets_dir.as_ref();
+
         let output_dir = PathBuf::new()
             .join(env::var_os("OUT_DIR")
                 .ok_or_else(|| anyhow::anyhow!("OUT_DIR variable is not defined. You should call this code from a Cargo `build.rs` script"))?)
-            .join("edge_frame_assets");
+            .join("edge_frame_assets")
+            .join(module);
 
         let output_files = compress(assets_dir, &output_dir, |path| {
             println!("cargo:rerun-if-changed={}", path.display())
@@ -203,9 +218,13 @@ pub mod prepare {
         };
 
         for (index, output_file) in output_files.iter().enumerate() {
-            println!("cargo:rustc-env=EDGE_FRAME_ASSET_{}_NAME=", index);
             println!(
-                "cargo:rustc-env=EDGE_FRAME_ASSET_{}_DATA={}",
+                "cargo:rustc-env={}_EDGE_FRAME_ASSET_NAME_{}=",
+                module, index
+            );
+            println!(
+                "cargo:rustc-env={}_EDGE_FRAME_ASSET_DATA_{}={}",
+                module,
                 index,
                 output_file.display()
             );
@@ -215,10 +234,13 @@ pub mod prepare {
     }
 
     pub fn compress(
-        assets_dir: &Path,
-        output_dir: &Path,
+        assets_dir: impl AsRef<Path>,
+        output_dir: impl AsRef<Path>,
         track: impl Fn(&Path),
     ) -> anyhow::Result<Vec<PathBuf>> {
+        let assets_dir = assets_dir.as_ref();
+        let output_dir = output_dir.as_ref();
+
         let output_files = fs::read_dir(assets_dir)?
             .filter_map(|file| file.ok())
             .filter(|file| file.metadata().map(|md| md.is_file()).unwrap_or(false))
@@ -229,6 +251,8 @@ pub mod prepare {
                     output_dir.join(format!("{}.gz", file.file_name().to_str().unwrap()));
 
                 track(&output_file);
+
+                fs::create_dir_all(output_dir).unwrap();
 
                 io::copy(
                     &mut fs::File::open(file.path()).unwrap(),

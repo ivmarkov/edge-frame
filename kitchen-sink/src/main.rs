@@ -93,9 +93,7 @@ fn render(route: &Routes) -> Html {
                     <RouteNavItem<Routes> text="Home" route={Routes::Home}/>
                 </Role<AppState>>
                 <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
-                    <NavGroup text="Settings">
-                        <WifiNavItem<Routes> route={Routes::Wifi}/>
-                    </NavGroup>
+                    <WifiNavItem<Routes> route={Routes::Wifi}/>
                 </Role<AppState>>
             </Nav>
             <Status>
