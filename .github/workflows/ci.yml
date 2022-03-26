@@ -23,7 +23,7 @@ jobs:
 #      - name: Setup | Std
 #        run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
       - name: Setup | Default to nightly
-        run: rustup default nightly
+        run: rustup default ${{ secrets.rust_toolchain }}
       - name: Setup | Trunk
         run: cargo install trunk
       - name: Build | Fmt Check
