@@ -26,5 +26,5 @@ web-sys = { version = "0.3", optional = true, features = ["console"] }
 yew = { version = "0.19", optional = true, default-features = false }
 yew-router = { version = "0.16", optional = true }
 strum = { version = "0.23", optional = true }
-embedded-svc = { version = "0.17.5", optional = true, default-features = false }
+embedded-svc = { version = "0.18", optional = true, default-features = false }
 flate2 = { version = "1", optional = true }

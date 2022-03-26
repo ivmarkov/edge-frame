@@ -1,3 +1,6 @@
 /dist
 /target
 Cargo.lock
+/kitchen-sink/dist
+/kitchen-sink/target
+/kitchen-sink/Cargo.lock
