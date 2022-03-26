@@ -1,6 +1,6 @@
 const MAX_ASSETS: usize = 10;
 
-#[cfg(feature = "assets-serve")]
+#[cfg(feature = "assets-register")]
 pub mod serve {
     use core::result::Result;
 
@@ -12,6 +12,7 @@ pub mod serve {
     use embedded_svc::http::server::Response;
     use embedded_svc::http::SendHeaders;
 
+    #[cfg(feature = "assets-serve")]
     const ASSETS: [(&'static str, &'static [u8]); super::MAX_ASSETS] = [
         (
             env!("EDGE_FRAME_ASSET_0_NAME"),
@@ -55,6 +56,7 @@ pub mod serve {
         ),
     ];
 
+    #[cfg(feature = "assets-serve")]
     pub fn register<R>(httpd: &mut R) -> Result<(), R::Error>
     where
         R: Registry,
