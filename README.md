@@ -1,4 +1,6 @@
-# (WIP) Edge-Frame - Minimal Web Frontend for IOT devices
+# Edge-Frame - Minimal Web Frontend for IOT devices
+
+![CI](https://github.com/ivmarkov/edge-frame/actions/workflows/ci.yml/badge.svg)
 
 ## Try it out
 
