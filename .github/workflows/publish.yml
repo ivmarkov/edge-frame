@@ -3,6 +3,9 @@ name: Publish
 on:
   workflow_dispatch
 
+env:
+  RUST_TOOLCHAIN: nightly-2022-03-23
+
 jobs:
   publish:
     name: Publish
@@ -13,9 +16,9 @@ jobs:
       - name: Setup | Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ secrets.rust_toolchain }}
+          toolchain: $RUST_TOOLCHAIN
       - name: Setup | Default to nightly
-        run: rustup default ${{ secrets.rust_toolchain }}
+        run: rustup default $RUST_TOOLCHAIN
       - name: Login
         run: cargo login ${{ secrets.crates_io_token }}
       - name: Build | Publish

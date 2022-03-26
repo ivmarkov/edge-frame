@@ -8,6 +8,9 @@ on:
   schedule:
     - cron: '50 4 * * *'
 
+env:
+  RUST_TOOLCHAIN: nightly-2022-03-23
+
 jobs:
   compile:
     name: Compile
@@ -18,10 +21,10 @@ jobs:
       - name: Setup | Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ secrets.rust_toolchain }}
+          toolchain: $RUST_TOOLCHAIN
           components: rustfmt, clippy
       - name: Setup | Default to nightly
-        run: rustup default ${{ secrets.rust_toolchain }}
+        run: rustup default $RUST_TOOLCHAIN
       - name: Setup | Trunk
         run: cargo install trunk
       - name: Build | Fmt Check
