@@ -12,6 +12,8 @@ pub mod serve {
     use embedded_svc::http::server::Response;
     use embedded_svc::http::SendHeaders;
 
+    use log::info;
+
     pub type Asset = (&'static str, &'static [u8]);
 
     pub type Assets = [Asset; super::MAX_ASSETS];
@@ -70,7 +72,7 @@ pub mod serve {
     {
         for (name, data) in assets {
             if !name.is_empty() && !data.is_empty() {
-                register_asset(httpd, name, data, ContentMetadata::derive(name))?;
+                register_asset(httpd, AssetMetadata::derive(name), data)?;
             }
         }
 
@@ -79,69 +81,66 @@ pub mod serve {
 
     pub fn register_asset<R>(
         httpd: &mut R,
-        name: impl AsRef<str>,
+        asset_metadata: AssetMetadata<'static>,
         data: &'static [u8],
-        content_metadata: ContentMetadata<'static>,
     ) -> Result<(), R::Error>
     where
         R: Registry,
     {
-        let name = name.as_ref();
+        {
+            let asset_metadata = asset_metadata.clone();
 
-        let uri = if content_metadata.root { "" } else { name };
+            httpd
+                .at(format!("/{}", asset_metadata.name))
+                .inline()
+                .get(move |req, mut resp| {
+                    if let Some(cache_control) = &asset_metadata.cache_control {
+                        resp.set_header("Cache-Control", cache_control.clone());
+                    }
 
-        httpd
-            .at(format!("/{}", uri))
-            .inline()
-            .get(move |req, mut resp| {
-                if let Some(cache_control) = &content_metadata.cache_control {
-                    resp.set_header("Cache-Control", cache_control.clone());
-                }
+                    if let Some(content_encoding) = &asset_metadata.content_encoding {
+                        resp.set_header("Content-Encoding", content_encoding.clone());
+                    }
 
-                if let Some(content_encoding) = &content_metadata.content_encoding {
-                    resp.set_header("Content-Encoding", content_encoding.clone());
-                }
+                    if let Some(content_type) = &asset_metadata.content_type {
+                        resp.set_header("Content-Type", content_type.clone());
+                    }
 
-                if let Some(content_type) = &content_metadata.content_type {
-                    resp.set_header("Content-Type", content_type.clone());
-                }
+                    Result::<_, anyhow::Error>::Ok(
+                        resp.send_bytes(req, data).map_err(|e| anyhow::anyhow!(e))?,
+                    )
+                })?;
+        }
 
-                Result::<_, anyhow::Error>::Ok(
-                    resp.send_bytes(req, data).map_err(|e| anyhow::anyhow!(e))?,
-                )
-            })?;
+        info!("Registered asset {:?}", asset_metadata);
 
         Ok(())
     }
 
-    pub struct ContentMetadata<'a> {
-        pub root: bool,
+    #[derive(Debug, Clone)]
+    pub struct AssetMetadata<'a> {
+        pub name: Cow<'a, str>,
         pub cache_control: Option<Cow<'a, str>>,
         pub content_encoding: Option<Cow<'a, str>>,
         pub content_type: Option<Cow<'a, str>>,
     }
 
-    impl<'a> ContentMetadata<'a> {
-        pub fn derive(name: impl AsRef<str>) -> ContentMetadata<'static> {
-            let name = name.as_ref();
-
-            let root = name.eq_ignore_ascii_case("index.html")
-                || name.eq_ignore_ascii_case("index.html.gz");
-
-            let cache_control = Some(if root {
-                "no-store"
-            } else {
-                "public, max-age=31536000"
-            });
-
+    impl<'a> AssetMetadata<'a> {
+        pub fn derive(name: &str) -> AssetMetadata<'_> {
             let mut split = name.split('.');
 
             let suffix = split.next_back().unwrap_or("");
 
-            let content_encoding = if suffix.eq_ignore_ascii_case("gz") {
-                Some("gzip")
+            let (name, content_encoding) = if suffix.eq_ignore_ascii_case("gz") {
+                (&name[..name.len() - 3], Some("gzip"))
             } else {
-                None
+                (name, None)
+            };
+
+            let (name, cache_control) = if name.eq_ignore_ascii_case("index.html") {
+                ("", "no-store")
+            } else {
+                (name, "public, max-age=31536000")
             };
 
             let suffix = if content_encoding.is_some() {
@@ -162,9 +161,9 @@ pub mod serve {
                 None
             };
 
-            ContentMetadata {
-                root,
-                cache_control: cache_control.map(Cow::Borrowed),
+            AssetMetadata {
+                name: Cow::Borrowed(name),
+                cache_control: Some(Cow::Borrowed(cache_control)),
                 content_encoding: content_encoding.map(Cow::Borrowed),
                 content_type: content_type.map(Cow::Borrowed),
             }
@@ -219,8 +218,10 @@ pub mod prepare {
 
         for (index, output_file) in output_files.iter().enumerate() {
             println!(
-                "cargo:rustc-env={}_EDGE_FRAME_ASSET_NAME_{}=",
-                module, index
+                "cargo:rustc-env={}_EDGE_FRAME_ASSET_NAME_{}={}",
+                module,
+                index,
+                output_file.file_name().unwrap().to_str().unwrap()
             );
             println!(
                 "cargo:rustc-env={}_EDGE_FRAME_ASSET_DATA_{}={}",
