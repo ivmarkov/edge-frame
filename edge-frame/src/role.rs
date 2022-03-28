@@ -59,10 +59,7 @@ pub fn role<R: Reducible2>(props: &RoleProps<R>) -> Html {
         (RoleStateValue::Unknown, _) if props.auth => {
             // Unknown permissions => render modal loader if auth=true
             html! {
-                <div class="modal is-active">
-                    <div class="modal-background"></div>
-                    <Loading/>
-                </div>
+                <Loading/>
             }
         }
         (RoleStateValue::AuthenticationFailed(credentials), _)
@@ -82,29 +79,19 @@ pub fn role<R: Reducible2>(props: &RoleProps<R>) -> Html {
             };
 
             html! {
-                <div class="modal is-active">
-                    <div class="modal-background"></div>
-                    <div class="modal-content">
-                        <Auth
-                            username={credentials.username.clone()}
-                            password={credentials.password.clone()}
-                            authenticating={matches!(&**role, RoleStateValue::Authenticating(_))}
-                            auth_failed={matches!(&**role, RoleStateValue::AuthenticationFailed(_))}
-                            {submit}
-                        />
-                    </div>
-                </div>
+                <Auth
+                    username={credentials.username.clone()}
+                    password={credentials.password.clone()}
+                    authenticating={matches!(&**role, RoleStateValue::Authenticating(_))}
+                    auth_failed={matches!(&**role, RoleStateValue::AuthenticationFailed(_))}
+                    {submit}
+                />
             }
         }
         _ if props.auth => {
             // No permissions => render permissions denied modal if auth=true
             html! {
-                <div class="modal is-active">
-                    <div class="modal-background"></div>
-                    <div class="modal-content">
-                        <NoPerm/>
-                    </div>
-                </div>
+                <NoPerm/>
             }
         }
         _ => {
@@ -126,6 +113,7 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static, S: Red
     props: &RoleLogoutStatusItemProps<R, S>,
 ) -> Html {
     let role = use_projection(props.projection.clone());
+    let history = use_history();
 
     match &**role {
         RoleStateValue::Role(role_value)
@@ -134,11 +122,10 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static, S: Red
             let selected = {
                 let auth_status_route = props.auth_status_route.clone();
                 let role_value = *role_value;
+                let role = role.clone();
 
                 Callback::from(move |_| {
                     role.dispatch(RoleAction::Update(RoleStateValue::LoggingOut(role_value)));
-
-                    let history = use_history();
 
                     if let Some(history) = history.as_ref() {
                         history.push(auth_status_route.clone());
@@ -148,7 +135,7 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static, S: Red
 
             html! {
                 <StatusItem
-                    icon="fa-lg fa-solid fa-wifi"
+                    icon="fa-lg fa-solid fa-right-from-bracket"
                     {selected}/>
             }
         }
@@ -159,12 +146,16 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static, S: Red
 }
 
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct RoleAuthStateProps<R: Reducible2> {
-    pub projection: Projection<R, RoleState, RoleAction>,
+pub struct RoleAuthStateProps<R: Routable + PartialEq + Clone + 'static, S: Reducible2> {
+    #[prop_or_default]
+    pub home: Option<R>,
+    pub projection: Projection<S, RoleState, RoleAction>,
 }
 
 #[function_component(RoleAuthState)]
-pub fn role_auth_state<R: Reducible2>(props: &RoleAuthStateProps<R>) -> Html {
+pub fn role_auth_state<R: Routable + PartialEq + Clone + 'static, S: Reducible2>(
+    props: &RoleAuthStateProps<R, S>,
+) -> Html {
     let role = use_projection(props.projection.clone());
 
     let role = match &**role {
@@ -172,7 +163,19 @@ pub fn role_auth_state<R: Reducible2>(props: &RoleAuthStateProps<R>) -> Html {
         _ => None,
     };
 
+    let login = if let Some(home) = props.home.clone() {
+        let history = use_history();
+
+        Some(Callback::from(move |_| {
+            if let Some(history) = history.as_ref() {
+                history.push(home.clone());
+            }
+        }))
+    } else {
+        None
+    };
+
     html! {
-        <AuthState {role}/>
+        <AuthState {login} {role}/>
     }
 }

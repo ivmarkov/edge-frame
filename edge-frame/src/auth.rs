@@ -51,41 +51,44 @@ pub fn auth(props: &AuthProps) -> Html {
     };
 
     html! {
-        <div class="box has-text-centered">
-            <div class="field">
-                <label class="label">{"Username"}</label>
-                <div class="control">
-                    <input
-                        class="input"
-                        type="text"
-                        placeholder="0..24 characters"
-                        value={username.raw_value()}
-                        oninput={username.change()}
+        <div class="columns is-flex is-vcentered">
+            <div class="column is-4">
+                <div class="box has-text-centered">
+                    <h3 class="title is-3">{"Login"}</h3>
+                    <div class="field">
+                        <label class="label">{"Username"}</label>
+                        <div class="control">
+                            <input
+                                class="input"
+                                type="text"
+                                value={username.raw_value()}
+                                oninput={username.change()}
+                                {disabled}
+                                />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label">{"Password"}</label>
+                        <div class="control">
+                            <input
+                                class="input"
+                                type="password"
+                                value={password.raw_value()}
+                                oninput={password.change()}
+                                {disabled}
+                                />
+                        </div>
+                    </div>
+                    <p class="help is-danger" style={hidden}>{"Invalid username or password"}</p>
+                    <button
+                        class={classes!("button", "my-4", if_true(props.authenticating, "is-loading"))}
                         {disabled}
-                        />
+                        {onclick}
+                    >
+                        {"Login"}
+                    </button>
                 </div>
             </div>
-            <div class="field">
-                <label class="label">{"Password"}</label>
-                <div class="control">
-                    <input
-                        class="input"
-                        type="password"
-                        placeholder="0..24 characters"
-                        value={password.raw_value()}
-                        oninput={password.change()}
-                        {disabled}
-                        />
-                </div>
-            </div>
-            <p class="help is-danger" style={hidden}>{"Invalid username or password"}</p>
-            <button
-                class={classes!("button", "my-4", if_true(props.authenticating, "is-loading"))}
-                {disabled}
-                {onclick}
-            >
-                {"Login"}
-            </button>
         </div>
     }
 }
@@ -93,6 +96,8 @@ pub fn auth(props: &AuthProps) -> Html {
 #[derive(Properties, Clone, Default, Debug, PartialEq)]
 pub struct AuthStateProps {
     pub role: Option<Role>,
+    #[prop_or_default]
+    pub login: Option<Callback<()>>,
 }
 
 #[function_component(AuthState)]
@@ -100,7 +105,25 @@ pub fn auth_state(props: &AuthStateProps) -> Html {
     match props.role {
         Some(Role::None) => {
             html! {
-                <div class="box has-text-centered">{"You are logged out."}</div>
+                <div class="columns is-flex is-vcentered">
+                    <div class="column is-4">
+                        <div class="box has-text-centered">
+                            <h3 class="title is-3">{"You are logged out."}</h3>
+                            {
+                                if let Some(login) = &props.login {
+                                    let login = login.clone();
+                                    let onclick = Callback::from(move |_| login.emit(()));
+
+                                    html! {
+                                        <a href="javascript:void(0);" {onclick}>{"Login again"}</a>
+                                    }
+                                } else {
+                                    html! {}
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
             }
         }
         None => {
@@ -110,7 +133,13 @@ pub fn auth_state(props: &AuthStateProps) -> Html {
         }
         Some(role) => {
             html! {
-                <div class="box has-text-centered">{format!("You are logged in as {}.", role)}</div>
+                <div class="columns is-flex is-vcentered">
+                    <div class="column is-4">
+                        <div class="box has-text-centered">
+                            <h3 class="title is-3">{format!("You are logged in as {}.", role)}</h3>
+                        </div>
+                    </div>
+                </div>
             }
         }
     }
@@ -119,8 +148,12 @@ pub fn auth_state(props: &AuthStateProps) -> Html {
 #[function_component(NoPerm)]
 pub fn no_perm() -> Html {
     html! {
-        <div class="box has-text-centered">
-            {"You have no permissions to access this content"}
+        <div class="columns is-flex is-vcentered">
+            <div class="column">
+                <div class="box has-text-centered">
+                    <h3 class="title is-3">{"You have no permissions to access this content"}</h3>
+                </div>
+            </div>
         </div>
     }
 }

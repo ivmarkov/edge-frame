@@ -90,7 +90,7 @@ fn render(route: &Routes) -> Html {
             app_url="https://github.com/ivmarkov/edge-frame">
             <Nav>
                 <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
-                    <RouteNavItem<Routes> text="Home" route={Routes::Home}/>
+                    <RouteNavItem<Routes> text="Home" icon="fa-solid fa-house" route={Routes::Home}/>
                 </Role<AppState>>
                 <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
                     <WifiNavItem<Routes> route={Routes::Wifi}/>
@@ -111,7 +111,7 @@ fn render(route: &Routes) -> Html {
                             </Role<AppState>>
                         },
                         Routes::AuthState => html! {
-                            <RoleAuthState<AppState> projection={AppState::role()}/>
+                            <RoleAuthState<Routes, AppState> home={Some(Routes::Home)} projection={AppState::role()}/>
                         },
                         Routes::Wifi => html! {
                             <Role<AppState> role={RoleValue::Admin} projection={AppState::role()} auth=true>

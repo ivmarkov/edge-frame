@@ -42,7 +42,7 @@ pub fn wifi_nav_item<R: Routable + PartialEq + Clone + 'static>(
     html! {
         <RouteNavItem<R>
             text="Wifi"
-            icon="fa-lg fa-solid fa-wifi"
+            icon="fa-solid fa-wifi"
             route={props.route.clone()}/>
     }
 }

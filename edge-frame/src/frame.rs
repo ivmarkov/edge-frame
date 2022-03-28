@@ -130,8 +130,8 @@ pub fn route_nav_item<R>(props: &RouteNavItemProps<R>) -> Html
 where
     R: Routable + Clone + 'static,
 {
-    let history = use_history();
     let route = use_route::<R>();
+    let history = use_history();
 
     let selected = {
         let route = props.route.clone();
@@ -206,12 +206,12 @@ pub fn route_status_item<R>(props: &RouteStatusItemProps<R>) -> Html
 where
     R: Routable + Clone + 'static,
 {
+    let history = use_history();
+
     let selected = {
         let route = props.route.clone();
 
         Callback::from(move |_| {
-            let history = use_history();
-
             if let Some(history) = history.as_ref() {
                 history.push(route.clone());
             }
@@ -274,6 +274,14 @@ pub fn frame(props: &FrameProps) -> Html {
 
     let open = use_state(|| false);
 
+    let onclick = {
+        let open = open.clone();
+
+        Callback::from(move |_| {
+            open.set(!*open);
+        })
+    };
+
     html! {
         <>
         <nav class="navbar" role="navigation" aria-label="main navigation">
@@ -294,7 +302,21 @@ pub fn frame(props: &FrameProps) -> Html {
                     }
                 }
 
-                <a href="javascript:void(0);" role="button" class={classes!("navbar-burger", if_true(*open, "is-active"))} aria-label="menu" aria-expanded="false" data-target="navbar">
+                <div class="navbar-item">
+                    <div class="buttons">
+                        { for props.children.iter().filter(|child| matches!(child, FrameChild::Status(_))) }
+                    </div>
+                </div>
+
+                <a
+                    href="javascript:void(0);"
+                    role="button"
+                    class={classes!("navbar-burger", if_true(*open, "is-active"))}
+                    aria-label="menu"
+                    aria-expanded="false"
+                    data-target="navbar"
+                    {onclick}
+                    >
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
@@ -307,11 +329,6 @@ pub fn frame(props: &FrameProps) -> Html {
                 </div>
 
                 <div class="navbar-end">
-                    <div class="navbar-item">
-                        <div class="buttons">
-                        { for props.children.iter().filter(|child| matches!(child, FrameChild::Status(_))) }
-                        </div>
-                    </div>
                 </div>
             </div>
         </nav>
