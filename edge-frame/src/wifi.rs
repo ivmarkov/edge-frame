@@ -64,8 +64,8 @@ pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Reducible2
     }
 }
 
-pub type WifiAction = ValueAction<Option<Configuration>>;
-pub type WifiState = ValueState<Option<Configuration>>;
+pub type WifiAction = ValueAction<Option<Configuration<String>>>;
+pub type WifiState = ValueState<Option<Configuration<String>>>;
 
 #[derive(Properties, Clone, Debug, PartialEq)]
 pub struct WifiProps<R: Reducible2> {
@@ -95,7 +95,7 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
         Callback::from(move |_| {
             if let Some(sta_conf) = sta_conf_form.get() {
                 if let Some(ap_conf) = ap_conf_form.get() {
-                    let mut new_conf: Configuration = Default::default();
+                    let mut new_conf: Configuration<String> = Default::default();
 
                     let (sta, ap) = new_conf.as_mixed_conf_mut();
                     *sta = sta_conf;
@@ -275,7 +275,7 @@ impl ApConfForm {
                     || self.secondary_dns.is_dirty())
     }
 
-    fn get(&self) -> Option<AccessPointConfiguration> {
+    fn get(&self) -> Option<AccessPointConfiguration<String>> {
         if self.has_errors() {
             None
         } else {
@@ -302,7 +302,7 @@ impl ApConfForm {
         }
     }
 
-    fn update(&mut self, conf: Option<&AccessPointConfiguration>) {
+    fn update(&mut self, conf: Option<&AccessPointConfiguration<String>>) {
         let dconf = Default::default();
         let conf = conf.unwrap_or(&dconf);
 
@@ -615,7 +615,7 @@ impl StaConfForm {
                             || self.secondary_dns.is_dirty()))
     }
 
-    fn get(&self) -> Option<ClientConfiguration> {
+    fn get(&self) -> Option<ClientConfiguration<String>> {
         if self.has_errors() {
             None
         } else {
@@ -645,7 +645,7 @@ impl StaConfForm {
         }
     }
 
-    fn update(&mut self, conf: Option<&ClientConfiguration>) {
+    fn update(&mut self, conf: Option<&ClientConfiguration<String>>) {
         let dconf = Default::default();
         let conf = conf.unwrap_or(&dconf);
 

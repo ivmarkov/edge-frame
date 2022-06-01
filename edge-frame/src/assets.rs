@@ -4,8 +4,8 @@ const MAX_ASSETS: usize = 10;
 pub mod serve {
     use core::result::Result;
 
+    // TODO: Remove
     extern crate alloc;
-    use alloc::borrow::Cow;
     use alloc::format;
 
     use embedded_svc::http::server::registry::Registry;
@@ -91,24 +91,22 @@ pub mod serve {
             let asset_metadata = asset_metadata.clone();
 
             httpd
-                .at(format!("/{}", asset_metadata.name))
+                .at(&format!("/{}", asset_metadata.name))
                 .inline()
                 .get(move |req, mut resp| {
                     if let Some(cache_control) = &asset_metadata.cache_control {
-                        resp.set_header("Cache-Control", cache_control.clone());
+                        resp.set_header("Cache-Control", cache_control);
                     }
 
                     if let Some(content_encoding) = &asset_metadata.content_encoding {
-                        resp.set_header("Content-Encoding", content_encoding.clone());
+                        resp.set_header("Content-Encoding", content_encoding);
                     }
 
                     if let Some(content_type) = &asset_metadata.content_type {
-                        resp.set_header("Content-Type", content_type.clone());
+                        resp.set_header("Content-Type", content_type);
                     }
 
-                    Result::<_, anyhow::Error>::Ok(
-                        resp.send_bytes(req, data).map_err(|e| anyhow::anyhow!(e))?,
-                    )
+                    resp.send_bytes(req, data)
                 })?;
         }
 
@@ -119,10 +117,10 @@ pub mod serve {
 
     #[derive(Debug, Clone)]
     pub struct AssetMetadata<'a> {
-        pub name: Cow<'a, str>,
-        pub cache_control: Option<Cow<'a, str>>,
-        pub content_encoding: Option<Cow<'a, str>>,
-        pub content_type: Option<Cow<'a, str>>,
+        pub name: &'a str,
+        pub cache_control: Option<&'a str>,
+        pub content_encoding: Option<&'a str>,
+        pub content_type: Option<&'a str>,
     }
 
     impl<'a> AssetMetadata<'a> {
@@ -162,10 +160,10 @@ pub mod serve {
             };
 
             AssetMetadata {
-                name: Cow::Borrowed(name),
-                cache_control: Some(Cow::Borrowed(cache_control)),
-                content_encoding: content_encoding.map(Cow::Borrowed),
-                content_type: content_type.map(Cow::Borrowed),
+                name,
+                cache_control: Some(cache_control),
+                content_encoding: content_encoding,
+                content_type: content_type,
             }
         }
     }
