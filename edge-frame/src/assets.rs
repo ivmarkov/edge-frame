@@ -59,7 +59,7 @@ pub mod serve {
         };
     }
 
-    pub fn serve_asset(
+    pub fn serve(
         req: impl Request,
         resp: impl Response,
         asset: &'static Asset,
