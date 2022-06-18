@@ -2,10 +2,13 @@ const MAX_ASSETS: usize = 10;
 
 #[cfg(feature = "assets-serve")]
 pub mod serve {
-    use core::fmt::Debug;
+    use core::fmt::{Debug, Write};
     use core::result::Result;
 
-    use embedded_svc::http::server::{Completion, Request, Response};
+    use embedded_svc::http::server::{
+        registry::Registry, Completion, HandlerError, Request, Response,
+    };
+    use log::info;
 
     pub type Asset = (&'static str, &'static [u8]);
 
@@ -59,20 +62,61 @@ pub mod serve {
         };
     }
 
+    pub fn register_assets<R, const N: usize>(
+        registry: &mut R,
+        assets: &[Asset],
+    ) -> Result<(), R::Error>
+    where
+        R: Registry,
+    {
+        for (name, data) in assets {
+            if !name.is_empty() && !data.is_empty() {
+                register_asset::<R, N>(registry, AssetMetadata::derive(name), data)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn register_asset<R, const N: usize>(
+        registry: &mut R,
+        asset_metadata: AssetMetadata<'static>,
+        data: &'static [u8],
+    ) -> Result<(), R::Error>
+    where
+        R: Registry,
+    {
+        {
+            let asset_metadata = asset_metadata.clone();
+
+            let mut uri = heapless::String::<N>::new();
+
+            write!(&mut uri, "/{}", asset_metadata.name).unwrap();
+
+            registry.handle_get(&uri, move |req, resp| {
+                serve_asset_data(req, resp, &asset_metadata, data)
+            })?;
+        }
+
+        info!("Registered asset {:?}", asset_metadata);
+
+        Ok(())
+    }
+
     pub fn serve(
         req: impl Request,
         resp: impl Response,
         asset: &'static Asset,
-    ) -> Result<Completion, impl Debug> {
-        serve_asset_data(req, resp, AssetMetadata::derive(asset.0), asset.1)
+    ) -> Result<Completion, HandlerError> {
+        serve_asset_data(req, resp, &AssetMetadata::derive(asset.0), asset.1)
     }
 
     pub fn serve_asset_data(
-        req: impl Request,
+        _req: impl Request,
         mut resp: impl Response,
-        asset_metadata: AssetMetadata<'static>,
+        asset_metadata: &AssetMetadata<'static>,
         data: &'static [u8],
-    ) -> Result<Completion, impl Debug> {
+    ) -> Result<Completion, HandlerError> {
         if let Some(cache_control) = &asset_metadata.cache_control {
             resp.set_header("Cache-Control", cache_control);
         }
@@ -85,7 +129,7 @@ pub mod serve {
             resp.set_header("Content-Type", content_type);
         }
 
-        resp.send_bytes(req, data)
+        Ok(resp.send_bytes(data)?)
     }
 
     #[derive(Debug, Clone)]
