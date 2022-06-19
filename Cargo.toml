@@ -6,9 +6,6 @@ members = [
     "kitchen-sink",
 ]
 
-[patch.crates-io]
-embedded-svc = { path = "../embedded-svc" }
-
 [profile.release]
 opt-level = "s"
 
