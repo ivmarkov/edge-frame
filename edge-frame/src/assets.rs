@@ -5,10 +5,10 @@ pub mod serve {
     use core::fmt::{Debug, Write};
     use core::result::Result;
 
-    use embedded_svc::http::server::{
-        registry::Registry, Completion, HandlerError, Request, Response,
-    };
     use log::info;
+
+    use embedded_svc::http::server::registry::Registry;
+    use embedded_svc::http::server::{HandlerResult, Request, Response};
 
     pub type Asset = (&'static str, &'static [u8]);
 
@@ -103,11 +103,7 @@ pub mod serve {
         Ok(())
     }
 
-    pub fn serve(
-        req: impl Request,
-        resp: impl Response,
-        asset: &'static Asset,
-    ) -> Result<Completion, HandlerError> {
+    pub fn serve(req: impl Request, resp: impl Response, asset: &'static Asset) -> HandlerResult {
         serve_asset_data(req, resp, &AssetMetadata::derive(asset.0), asset.1)
     }
 
@@ -116,7 +112,7 @@ pub mod serve {
         mut resp: impl Response,
         asset_metadata: &AssetMetadata<'static>,
         data: &'static [u8],
-    ) -> Result<Completion, HandlerError> {
+    ) -> HandlerResult {
         if let Some(cache_control) = &asset_metadata.cache_control {
             resp.set_header("Cache-Control", cache_control);
         }
@@ -129,7 +125,101 @@ pub mod serve {
             resp.set_header("Content-Type", content_type);
         }
 
-        Ok(resp.send_bytes(data)?)
+        resp.send_bytes(data)?;
+
+        Ok(())
+    }
+
+    pub mod asynch {
+        use core::fmt::Write as _;
+        use core::future::Future;
+
+        use log::info;
+
+        use embedded_svc::http::server::asynch::{Handler, HandlerResult, Request, Response};
+        use embedded_svc::http::server::registry::asynch::Registry;
+
+        pub use super::{Asset, AssetMetadata};
+
+        pub fn register_assets<R, const N: usize>(
+            registry: &mut R,
+            assets: &[Asset],
+        ) -> Result<(), R::Error>
+        where
+            R: Registry,
+        {
+            for (name, data) in assets {
+                if !name.is_empty() && !data.is_empty() {
+                    register_asset::<R, N>(registry, AssetMetadata::derive(name), data)?;
+                }
+            }
+
+            Ok(())
+        }
+
+        pub fn register_asset<R, const N: usize>(
+            registry: &mut R,
+            asset_metadata: AssetMetadata<'static>,
+            data: &'static [u8],
+        ) -> Result<(), R::Error>
+        where
+            R: Registry,
+        {
+            {
+                let asset_metadata = asset_metadata.clone();
+
+                let mut uri = heapless::String::<N>::new();
+
+                write!(&mut uri, "/{}", asset_metadata.name).unwrap();
+
+                struct ServeAssetDataHandler(AssetMetadata<'static>, &'static [u8]);
+
+                impl<R: Request, S: Response> Handler<R, S> for ServeAssetDataHandler {
+                    type HandleFuture<'a> = impl Future<Output = HandlerResult> + where Self: 'a;
+
+                    fn handle(&self, req: R, resp: S) -> Self::HandleFuture<'_> {
+                        async move { serve_asset_data(req, resp, &self.0, &self.1).await }
+                    }
+                }
+
+                registry.handle_get(&uri, ServeAssetDataHandler(asset_metadata, data))?;
+            }
+
+            info!("Registered asset {:?}", asset_metadata);
+
+            Ok(())
+        }
+
+        pub async fn serve(
+            req: impl Request,
+            resp: impl Response,
+            asset: &'static Asset,
+        ) -> HandlerResult {
+            serve_asset_data(req, resp, &AssetMetadata::derive(asset.0), asset.1).await
+        }
+
+        pub async fn serve_asset_data(
+            _req: impl Request,
+            mut resp: impl Response,
+            asset_metadata: &AssetMetadata<'static>,
+            data: &'static [u8],
+        ) -> HandlerResult {
+            if let Some(cache_control) = &asset_metadata.cache_control {
+                resp.set_header("Cache-Control", cache_control);
+            }
+
+            if let Some(content_encoding) = &asset_metadata.content_encoding {
+                resp.set_header("Content-Encoding", content_encoding);
+            }
+
+            if let Some(content_type) = &asset_metadata.content_type {
+                resp.set_header("Content-Type", content_type);
+            }
+
+            resp.send_bytes(data).await?;
+
+            Ok(())
+        }
     }
 
     #[derive(Debug, Clone)]
