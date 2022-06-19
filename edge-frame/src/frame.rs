@@ -110,7 +110,7 @@ pub fn nav_item(props: &NavItemProps) -> Html {
     }
 }
 
-#[derive(Properties, Clone, Default, Debug, PartialEq)]
+#[derive(Properties, Clone, Default, Debug, PartialEq, Eq)]
 pub struct RouteNavItemProps<R>
 where
     R: Routable + Clone,
@@ -189,7 +189,7 @@ pub fn status_item(props: &StatusItemProps) -> Html {
     }
 }
 
-#[derive(Properties, Clone, Default, Debug, PartialEq)]
+#[derive(Properties, Clone, Default, Debug, PartialEq, Eq)]
 pub struct RouteStatusItemProps<R>
 where
     R: Routable + Clone,
