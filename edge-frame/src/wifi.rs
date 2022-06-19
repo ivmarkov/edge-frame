@@ -95,7 +95,7 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
         Callback::from(move |_| {
             if let Some(sta_conf) = sta_conf_form.get() {
                 if let Some(ap_conf) = ap_conf_form.get() {
-                    let mut new_conf: Configuration<String> = Default::default();
+                    let mut new_conf: Configuration = Default::default();
 
                     let (sta, ap) = new_conf.as_mixed_conf_mut();
                     *sta = sta_conf;
@@ -280,11 +280,11 @@ impl ApConfForm {
             None
         } else {
             Some(AccessPointConfiguration {
-                ssid: self.ssid.value().unwrap(),
+                ssid: self.ssid.value().unwrap().as_str().into(),
                 ssid_hidden: self.hidden_ssid.value().unwrap(),
 
                 auth_method: self.auth.value().unwrap(),
-                password: self.password.value().unwrap_or_default(),
+                password: self.password.value().unwrap_or_default().as_str().into(),
 
                 ip_conf: if self.ip_conf_enabled.value().unwrap() {
                     Some(RouterConfiguration {
@@ -306,12 +306,13 @@ impl ApConfForm {
         let dconf = Default::default();
         let conf = conf.unwrap_or(&dconf);
 
-        self.ssid.update(conf.ssid.clone());
+        self.ssid.update(conf.ssid.as_str().to_owned());
         self.hidden_ssid.update(conf.ssid_hidden);
 
         self.auth.update(conf.auth_method.to_string());
-        self.password.update(conf.password.clone());
-        self.password_confirm.update(conf.password.clone());
+        self.password.update(conf.password.as_str().to_owned());
+        self.password_confirm
+            .update(conf.password.as_str().to_owned());
 
         self.ip_conf_enabled.update(conf.ip_conf.is_some());
 
@@ -620,10 +621,10 @@ impl StaConfForm {
             None
         } else {
             Some(ClientConfiguration {
-                ssid: self.ssid.value().unwrap(),
+                ssid: self.ssid.value().unwrap().as_str().into(),
 
                 auth_method: self.auth.value().unwrap(),
-                password: self.password.value().unwrap_or_default(),
+                password: self.password.value().unwrap_or_default().as_str().into(),
 
                 ip_conf: if self.ip_conf_enabled.value().unwrap() {
                     Some(if self.dhcp_enabled.value().unwrap() {
@@ -649,11 +650,12 @@ impl StaConfForm {
         let dconf = Default::default();
         let conf = conf.unwrap_or(&dconf);
 
-        self.ssid.update(conf.ssid.clone());
+        self.ssid.update(conf.ssid.as_str().to_owned());
 
         self.auth.update(conf.auth_method.to_string());
-        self.password.update(conf.password.clone());
-        self.password_confirm.update(conf.password.clone());
+        self.password.update(conf.password.as_str().to_owned());
+        self.password_confirm
+            .update(conf.password.as_str().to_owned());
 
         self.ip_conf_enabled.update(conf.ip_conf.is_some());
 
