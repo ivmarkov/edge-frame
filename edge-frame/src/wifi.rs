@@ -64,8 +64,8 @@ pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Reducible2
     }
 }
 
-pub type WifiAction = ValueAction<Option<Configuration<String>>>;
-pub type WifiState = ValueState<Option<Configuration<String>>>;
+pub type WifiAction = ValueAction<Option<Configuration>>;
+pub type WifiState = ValueState<Option<Configuration>>;
 
 #[derive(Properties, Clone, Debug, PartialEq)]
 pub struct WifiProps<R: Reducible2> {
@@ -275,7 +275,7 @@ impl ApConfForm {
                     || self.secondary_dns.is_dirty())
     }
 
-    fn get(&self) -> Option<AccessPointConfiguration<String>> {
+    fn get(&self) -> Option<AccessPointConfiguration> {
         if self.has_errors() {
             None
         } else {
@@ -302,7 +302,7 @@ impl ApConfForm {
         }
     }
 
-    fn update(&mut self, conf: Option<&AccessPointConfiguration<String>>) {
+    fn update(&mut self, conf: Option<&AccessPointConfiguration>) {
         let dconf = Default::default();
         let conf = conf.unwrap_or(&dconf);
 
@@ -615,7 +615,7 @@ impl StaConfForm {
                             || self.secondary_dns.is_dirty()))
     }
 
-    fn get(&self) -> Option<ClientConfiguration<String>> {
+    fn get(&self) -> Option<ClientConfiguration> {
         if self.has_errors() {
             None
         } else {
@@ -645,7 +645,7 @@ impl StaConfForm {
         }
     }
 
-    fn update(&mut self, conf: Option<&ClientConfiguration<String>>) {
+    fn update(&mut self, conf: Option<&ClientConfiguration>) {
         let dconf = Default::default();
         let conf = conf.unwrap_or(&dconf);
 
