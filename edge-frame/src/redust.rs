@@ -285,7 +285,7 @@ where
 {
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct ValueState<S>(S);
 
 impl<S> ValueState<S> {
@@ -314,7 +314,7 @@ impl<S> Deref for ValueState<S> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueAction<S> {
     Update(S),
 }

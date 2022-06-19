@@ -30,7 +30,7 @@ impl Default for EditScope {
     }
 }
 
-#[derive(Properties, Clone, Debug, PartialEq)]
+#[derive(Properties, Clone, Debug, PartialEq, Eq)]
 pub struct WifiNavItemProps<R: Routable + PartialEq + Clone + 'static> {
     pub route: R,
 }
