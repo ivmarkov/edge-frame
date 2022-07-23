@@ -78,7 +78,7 @@ pub struct WifiProps<R: Reducible2> {
 #[function_component(Wifi)]
 pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
     let conf_store = use_projection(props.projection.clone());
-    let conf = (&**conf_store).as_ref();
+    let conf = (**conf_store).as_ref();
 
     let mut ap_conf_form = ApConfForm::new();
     let mut sta_conf_form = StaConfForm::new();

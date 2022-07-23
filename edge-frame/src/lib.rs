@@ -1,3 +1,4 @@
+#![allow(clippy::let_unit_value)]
 #![cfg_attr(feature = "assets-serve", no_std)]
 #![cfg_attr(feature = "assets-serve", feature(generic_associated_types))]
 #![cfg_attr(feature = "assets-serve", feature(type_alias_impl_trait))]
