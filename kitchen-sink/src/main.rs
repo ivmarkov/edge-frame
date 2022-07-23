@@ -43,11 +43,11 @@ impl Reducible for AppState {
         match action {
             AppAction::UpdateRole(action) => Self {
                 role: self.role.clone().reduce(action),
-                ..(&*self).clone()
+                ..(*self).clone()
             },
             AppAction::UpdateWifi(action) => Self {
                 wifi: self.wifi.clone().reduce(action),
-                ..(&*self).clone()
+                ..(*self).clone()
             },
         }
         .into()
