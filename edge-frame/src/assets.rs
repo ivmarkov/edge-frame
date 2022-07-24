@@ -229,7 +229,6 @@ pub mod serve {
         pub fn register_assets<'a, C, N>(
             handler: ServerHandler<N>,
             assets: &'a [Asset],
-            data: &'static [u8],
         ) -> ServerHandler<AssetsHandlerRegistration<'a, N>>
         where
             C: Connection,
@@ -240,6 +239,7 @@ pub mod serve {
         pub fn register_asset<C, N>(
             handler: ServerHandler<N>,
             asset_metadata: AssetMetadata<'static>,
+            data: &'static [u8],
         ) -> ServerHandler<SimpleHandlerRegistration<impl Handler<C>, N>>
         where
             C: Connection,
