@@ -22,43 +22,43 @@ pub mod serve {
         ($module:literal) => {
             [
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_0")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_0")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_0"))),
                 ),
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_1")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_1")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_1"))),
                 ),
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_2")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_2")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_2"))),
                 ),
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_3")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_3")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_3"))),
                 ),
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_4")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_4")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_4"))),
                 ),
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_5")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_5")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_5"))),
                 ),
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_6")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_6")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_6"))),
                 ),
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_7")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_7")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_7"))),
                 ),
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_8")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_8")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_8"))),
                 ),
                 (
-                    env!(concat!($module, "_EDGE_FRAME_ASSET_NAME_9")),
+                    env!(concat!($module, "_EDGE_FRAME_ASSET_URI_9")),
                     include_bytes!(env!(concat!($module, "_EDGE_FRAME_ASSET_DATA_9"))),
                 ),
             ]
