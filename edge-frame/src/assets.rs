@@ -2,13 +2,16 @@ const MAX_ASSETS: usize = 10;
 
 #[cfg(feature = "assets-serve")]
 pub mod serve {
-    use core::fmt::{Debug, Write};
-    use core::result::Result;
+    use core::fmt::Debug;
 
+    use embedded_svc::io::Write;
     use log::info;
 
-    use embedded_svc::http::server::registry::Registry;
-    use embedded_svc::http::server::{HandlerResult, Request, Response};
+    use embedded_svc::http::server::{Connection, FnHandler, Handler, HandlerResult};
+    use embedded_svc::utils::http::server::registration::{
+        ServerHandler, SimpleHandlerRegistration,
+    };
+    use embedded_svc::utils::http::Headers;
 
     pub type Asset = (&'static str, &'static [u8]);
 
@@ -62,161 +65,144 @@ pub mod serve {
         };
     }
 
-    pub fn register_assets<R, const N: usize>(
-        registry: &mut R,
-        assets: &[Asset],
-    ) -> Result<(), R::Error>
-    where
-        R: Registry,
-    {
-        for (name, data) in assets {
-            if !name.is_empty() && !data.is_empty() {
-                register_asset::<R, N>(registry, AssetMetadata::derive(name), data)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn register_asset<R, const N: usize>(
-        registry: &mut R,
+    pub fn register_asset<C, N>(
+        handler: ServerHandler<N>,
         asset_metadata: AssetMetadata<'static>,
         data: &'static [u8],
-    ) -> Result<(), R::Error>
+    ) -> ServerHandler<SimpleHandlerRegistration<impl Handler<C>, N>>
     where
-        R: Registry,
+        C: Connection,
     {
-        {
-            let asset_metadata = asset_metadata.clone();
+        let asset_metadata2 = asset_metadata.clone();
 
-            let mut uri = heapless::String::<N>::new();
+        let handler = handler.register_get(
+            asset_metadata.uri,
+            FnHandler::new(move |connection, request| {
+                serve_asset_data(connection, request, asset_metadata.clone(), data)
+            }),
+        );
 
-            write!(&mut uri, "/{}", asset_metadata.name).unwrap();
+        info!("Registered asset {:?}", asset_metadata2);
 
-            registry.handle_get(&uri, move |req, resp| {
-                serve_asset_data(req, resp, &asset_metadata, data)
-            })?;
-        }
-
-        info!("Registered asset {:?}", asset_metadata);
-
-        Ok(())
+        handler
     }
 
-    pub fn serve(req: impl Request, resp: impl Response, asset: &'static Asset) -> HandlerResult {
-        serve_asset_data(req, resp, &AssetMetadata::derive(asset.0), asset.1)
+    pub fn serve<C: Connection>(
+        connection: &mut C,
+        request: C::Request,
+        asset: &'static Asset,
+    ) -> HandlerResult {
+        serve_asset_data(connection, request, AssetMetadata::derive(asset.0), asset.1)
     }
 
-    pub fn serve_asset_data(
-        _req: impl Request,
-        mut resp: impl Response,
-        asset_metadata: &AssetMetadata<'static>,
+    pub fn serve_asset_data<C: Connection>(
+        connection: &mut C,
+        request: C::Request,
+        asset_metadata: AssetMetadata<'static>,
         data: &'static [u8],
     ) -> HandlerResult {
+        let mut headers = Headers::<3>::new();
+
         if let Some(cache_control) = &asset_metadata.cache_control {
-            resp.set_header("Cache-Control", cache_control);
+            headers.set_cache_control(cache_control);
         }
 
         if let Some(content_encoding) = &asset_metadata.content_encoding {
-            resp.set_header("Content-Encoding", content_encoding);
+            headers.set_content_encoding(content_encoding);
         }
 
         if let Some(content_type) = &asset_metadata.content_type {
-            resp.set_header("Content-Type", content_type);
+            headers.set_content_type(content_type);
         }
 
-        resp.send_bytes(data)?;
+        let mut response = connection.into_response(request, 200, None, headers.as_slice())?;
+
+        connection.writer(&mut response).write_all(data)?;
 
         Ok(())
     }
 
     pub mod asynch {
-        use core::fmt::Write as _;
         use core::future::Future;
 
+        use embedded_svc::io::asynch::Write;
         use log::info;
 
-        use embedded_svc::http::server::asynch::{Handler, HandlerResult, Request, Response};
-        use embedded_svc::http::server::registry::asynch::Registry;
+        use embedded_svc::http::server::asynch::{Connection, Handler, HandlerResult};
+        use embedded_svc::utils::http::server::registration::asynch::{
+            ServerHandler, SimpleHandlerRegistration,
+        };
+        use embedded_svc::utils::http::Headers;
 
         pub use super::{Asset, AssetMetadata};
 
-        pub fn register_assets<R, const N: usize>(
-            registry: &mut R,
-            assets: &[Asset],
-        ) -> Result<(), R::Error>
-        where
-            R: Registry,
-        {
-            for (name, data) in assets {
-                if !name.is_empty() && !data.is_empty() {
-                    register_asset::<R, N>(registry, AssetMetadata::derive(name), data)?;
-                }
-            }
-
-            Ok(())
-        }
-
-        pub fn register_asset<R, const N: usize>(
-            registry: &mut R,
+        pub fn register_asset<C, N>(
+            handler: ServerHandler<N>,
             asset_metadata: AssetMetadata<'static>,
             data: &'static [u8],
-        ) -> Result<(), R::Error>
+        ) -> ServerHandler<SimpleHandlerRegistration<impl Handler<C>, N>>
         where
-            R: Registry,
+            C: Connection,
         {
-            {
-                let asset_metadata = asset_metadata.clone();
+            let asset_metadata2 = asset_metadata.clone();
 
-                let mut uri = heapless::String::<N>::new();
+            struct ServeAssetDataHandler(AssetMetadata<'static>, &'static [u8]);
 
-                write!(&mut uri, "/{}", asset_metadata.name).unwrap();
+            impl<C: Connection> Handler<C> for ServeAssetDataHandler {
+                type HandleFuture<'a> = impl Future<Output = HandlerResult> where Self: 'a, C: 'a;
 
-                struct ServeAssetDataHandler(AssetMetadata<'static>, &'static [u8]);
-
-                impl<R: Request, S: Response> Handler<R, S> for ServeAssetDataHandler {
-                    type HandleFuture<'a> = impl Future<Output = HandlerResult> + where Self: 'a;
-
-                    fn handle(&self, req: R, resp: S) -> Self::HandleFuture<'_> {
-                        async move { serve_asset_data(req, resp, &self.0, &self.1).await }
-                    }
+                fn handle<'a>(
+                    &'a self,
+                    connection: &'a mut C,
+                    request: C::Request,
+                ) -> Self::HandleFuture<'a> {
+                    async move { serve_asset_data(connection, request, self.0.clone(), &self.1).await }
                 }
-
-                registry.handle_get(&uri, ServeAssetDataHandler(asset_metadata, data))?;
             }
 
-            info!("Registered asset {:?}", asset_metadata);
+            let handler = handler.register_get::<C, _>(
+                asset_metadata.uri,
+                ServeAssetDataHandler(asset_metadata, data),
+            );
 
-            Ok(())
+            info!("Registered asset {:?}", asset_metadata2);
+
+            handler
         }
 
-        pub async fn serve(
-            req: impl Request,
-            resp: impl Response,
+        pub async fn serve<C: Connection>(
+            connection: &mut C,
+            request: C::Request,
             asset: &'static Asset,
         ) -> HandlerResult {
-            serve_asset_data(req, resp, &AssetMetadata::derive(asset.0), asset.1).await
+            serve_asset_data(connection, request, AssetMetadata::derive(asset.0), asset.1).await
         }
 
-        pub async fn serve_asset_data(
-            _req: impl Request,
-            mut resp: impl Response,
-            asset_metadata: &AssetMetadata<'static>,
+        pub async fn serve_asset_data<C: Connection>(
+            connection: &mut C,
+            request: C::Request,
+            asset_metadata: AssetMetadata<'static>,
             data: &'static [u8],
         ) -> HandlerResult {
+            let mut headers = Headers::<3>::new();
+
             if let Some(cache_control) = &asset_metadata.cache_control {
-                resp.set_header("Cache-Control", cache_control);
+                headers.set_cache_control(cache_control);
             }
 
             if let Some(content_encoding) = &asset_metadata.content_encoding {
-                resp.set_header("Content-Encoding", content_encoding);
+                headers.set_content_encoding(content_encoding);
             }
 
             if let Some(content_type) = &asset_metadata.content_type {
-                resp.set_header("Content-Type", content_type);
+                headers.set_content_type(content_type);
             }
 
-            resp.send_bytes(data).await?;
+            let mut response = connection
+                .into_response(request, 200, None, headers.as_slice())
+                .await?;
+
+            connection.writer(&mut response).write_all(data).await?;
 
             Ok(())
         }
@@ -224,28 +210,28 @@ pub mod serve {
 
     #[derive(Debug, Clone)]
     pub struct AssetMetadata<'a> {
-        pub name: &'a str,
+        pub uri: &'a str,
         pub cache_control: Option<&'a str>,
         pub content_encoding: Option<&'a str>,
         pub content_type: Option<&'a str>,
     }
 
     impl<'a> AssetMetadata<'a> {
-        pub fn derive(name: &str) -> AssetMetadata<'_> {
-            let mut split = name.split('.');
+        pub fn derive(uri: &str) -> AssetMetadata<'_> {
+            let mut split = uri.split('.');
 
             let suffix = split.next_back().unwrap_or("");
 
             let (name, content_encoding) = if suffix.eq_ignore_ascii_case("gz") {
-                (&name[..name.len() - 3], Some("gzip"))
+                (&uri[..uri.len() - 3], Some("gzip"))
             } else {
-                (name, None)
+                (uri, None)
             };
 
-            let (name, cache_control) = if name.eq_ignore_ascii_case("index.html") {
+            let (uri, cache_control) = if name.eq_ignore_ascii_case("/index.html") {
                 ("", "no-store")
             } else {
-                (name, "public, max-age=31536000")
+                (uri, "public, max-age=31536000")
             };
 
             let suffix = if content_encoding.is_some() {
@@ -267,7 +253,7 @@ pub mod serve {
             };
 
             AssetMetadata {
-                name,
+                uri,
                 cache_control: Some(cache_control),
                 content_encoding: content_encoding,
                 content_type: content_type,
@@ -323,7 +309,7 @@ pub mod prepare {
 
         for (index, output_file) in output_files.iter().enumerate() {
             println!(
-                "cargo:rustc-env={}_EDGE_FRAME_ASSET_NAME_{}={}",
+                "cargo:rustc-env={}_EDGE_FRAME_ASSET_URI_{}=/{}",
                 module,
                 index,
                 output_file.file_name().unwrap().to_str().unwrap()
