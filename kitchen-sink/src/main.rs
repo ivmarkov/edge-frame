@@ -12,7 +12,7 @@ use edge_frame::redust::*;
 use edge_frame::role::*;
 use edge_frame::wifi::*;
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct AppState {
     pub role: Rc<RoleState>,
     pub wifi: Rc<WifiState>,
@@ -55,7 +55,7 @@ impl Reducible for AppState {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppAction {
     UpdateRole(RoleAction),
     UpdateWifi(WifiAction),
