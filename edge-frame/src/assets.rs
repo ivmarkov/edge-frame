@@ -9,7 +9,7 @@ pub mod serve {
 
     use embedded_svc::http::server::{Connection, FnHandler, Handler, HandlerResult};
     use embedded_svc::utils::http::server::registration::{
-        ServerHandler, SimpleHandlerRegistration,
+        HandlerRegistration, ServerHandler, SimpleHandlerRegistration,
     };
     use embedded_svc::utils::http::Headers;
 
@@ -63,6 +63,58 @@ pub mod serve {
                 ),
             ]
         };
+    }
+
+    pub struct AssetsHandlerRegistration<'a, N> {
+        assets: &'a [Asset],
+        next: N,
+    }
+
+    impl<'a, N> AssetsHandlerRegistration<'a, N> {
+        pub const fn new(assets: &'a [Asset], next: N) -> Self {
+            Self { assets, next }
+        }
+    }
+
+    impl<'b, N, C> HandlerRegistration<C> for AssetsHandlerRegistration<'b, N>
+    where
+        N: HandlerRegistration<C>,
+        C: Connection,
+    {
+        fn handle<'a>(
+            &'a self,
+            mut path_registered: bool,
+            path: &'a str,
+            method: embedded_svc::http::Method,
+            connection: &'a mut C,
+            request: <C as Connection>::Request,
+        ) -> HandlerResult {
+            for (uri, data) in self.assets {
+                let asset_metadata = AssetMetadata::derive(uri);
+
+                if path == asset_metadata.uri {
+                    path_registered = true;
+
+                    if method == embedded_svc::http::Method::Get {
+                        return serve_asset_data(connection, request, asset_metadata, data);
+                    }
+                }
+            }
+
+            self.next
+                .handle(path_registered, path, method, connection, request)
+        }
+    }
+
+    pub fn register_assets<'a, C, N>(
+        handler: ServerHandler<N>,
+        assets: &'a [Asset],
+        data: &'static [u8],
+    ) -> ServerHandler<AssetsHandlerRegistration<'a, N>>
+    where
+        C: Connection,
+    {
+        ServerHandler::new(AssetsHandlerRegistration::new(assets, handler.release()))
     }
 
     pub fn register_asset<C, N>(
@@ -130,11 +182,61 @@ pub mod serve {
 
         use embedded_svc::http::server::asynch::{Connection, Handler, HandlerResult};
         use embedded_svc::utils::http::server::registration::asynch::{
-            ServerHandler, SimpleHandlerRegistration,
+            HandlerRegistration, ServerHandler, SimpleHandlerRegistration,
         };
         use embedded_svc::utils::http::Headers;
 
-        pub use super::{Asset, AssetMetadata};
+        pub use super::{Asset, AssetMetadata, AssetsHandlerRegistration};
+
+        impl<'b, N, C> HandlerRegistration<C> for AssetsHandlerRegistration<'b, N>
+        where
+            N: HandlerRegistration<C>,
+            C: Connection,
+        {
+            type HandleFuture<'a> = impl Future<Output = HandlerResult>
+            where
+                Self: 'a,
+                C: 'a;
+
+            fn handle<'a>(
+                &'a self,
+                mut path_registered: bool,
+                path: &'a str,
+                method: embedded_svc::http::Method,
+                connection: &'a mut C,
+                request: <C as Connection>::Request,
+            ) -> Self::HandleFuture<'a> {
+                async move {
+                    for (uri, data) in self.assets {
+                        let asset_metadata = AssetMetadata::derive(uri);
+
+                        if path == asset_metadata.uri {
+                            path_registered = true;
+
+                            if method == embedded_svc::http::Method::Get {
+                                return serve_asset_data(connection, request, asset_metadata, data)
+                                    .await;
+                            }
+                        }
+                    }
+
+                    self.next
+                        .handle(path_registered, path, method, connection, request)
+                        .await
+                }
+            }
+        }
+
+        pub fn register_assets<'a, C, N>(
+            handler: ServerHandler<N>,
+            assets: &'a [Asset],
+            data: &'static [u8],
+        ) -> ServerHandler<AssetsHandlerRegistration<'a, N>>
+        where
+            C: Connection,
+        {
+            ServerHandler::new(AssetsHandlerRegistration::new(assets, handler.release()))
+        }
 
         pub fn register_asset<C, N>(
             handler: ServerHandler<N>,
