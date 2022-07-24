@@ -109,7 +109,6 @@ pub mod serve {
     pub fn register_assets<'a, C, N>(
         handler: ServerHandler<N>,
         assets: &'a [Asset],
-        data: &'static [u8],
     ) -> ServerHandler<AssetsHandlerRegistration<'a, N>>
     where
         C: Connection,
@@ -230,7 +229,6 @@ pub mod serve {
         pub fn register_assets<'a, C, N>(
             handler: ServerHandler<N>,
             assets: &'a [Asset],
-            data: &'static [u8],
         ) -> ServerHandler<AssetsHandlerRegistration<'a, N>>
         where
             C: Connection,
