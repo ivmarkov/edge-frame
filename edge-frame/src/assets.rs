@@ -4,14 +4,10 @@ const MAX_ASSETS: usize = 10;
 pub mod serve {
     use core::fmt::Debug;
 
-    use embedded_svc::io::Write;
-    use log::info;
-
-    use embedded_svc::http::server::{Connection, FnHandler, Handler, HandlerResult};
-    use embedded_svc::utils::http::server::registration::{
-        HandlerRegistration, ServerHandler, SimpleHandlerRegistration,
-    };
+    use embedded_svc::http::server::{Connection, HandlerResult, Request};
     use embedded_svc::utils::http::Headers;
+
+    use embedded_svc::io::Write;
 
     pub type Asset = (&'static str, &'static [u8]);
 
@@ -65,90 +61,12 @@ pub mod serve {
         };
     }
 
-    pub struct AssetsHandlerRegistration<'a, N> {
-        assets: &'a [Asset],
-        next: N,
-    }
-
-    impl<'a, N> AssetsHandlerRegistration<'a, N> {
-        pub const fn new(assets: &'a [Asset], next: N) -> Self {
-            Self { assets, next }
-        }
-    }
-
-    impl<'b, N, C> HandlerRegistration<C> for AssetsHandlerRegistration<'b, N>
-    where
-        N: HandlerRegistration<C>,
-        C: Connection,
-    {
-        fn handle<'a>(
-            &'a self,
-            mut path_registered: bool,
-            path: &'a str,
-            method: embedded_svc::http::Method,
-            connection: &'a mut C,
-            request: <C as Connection>::Request,
-        ) -> HandlerResult {
-            for (uri, data) in self.assets {
-                let asset_metadata = AssetMetadata::derive(uri);
-
-                if path == asset_metadata.uri {
-                    path_registered = true;
-
-                    if method == embedded_svc::http::Method::Get {
-                        return serve_asset_data(connection, request, asset_metadata, data);
-                    }
-                }
-            }
-
-            self.next
-                .handle(path_registered, path, method, connection, request)
-        }
-    }
-
-    pub fn register_assets<'a, C, N>(
-        handler: ServerHandler<N>,
-        assets: &'a [Asset],
-    ) -> ServerHandler<AssetsHandlerRegistration<'a, N>>
-    where
-        C: Connection,
-    {
-        ServerHandler::new(AssetsHandlerRegistration::new(assets, handler.release()))
-    }
-
-    pub fn register_asset<C, N>(
-        handler: ServerHandler<N>,
-        asset_metadata: AssetMetadata<'static>,
-        data: &'static [u8],
-    ) -> ServerHandler<SimpleHandlerRegistration<impl Handler<C>, N>>
-    where
-        C: Connection,
-    {
-        let asset_metadata2 = asset_metadata.clone();
-
-        let handler = handler.register_get(
-            asset_metadata.uri,
-            FnHandler::new(move |connection, request| {
-                serve_asset_data(connection, request, asset_metadata.clone(), data)
-            }),
-        );
-
-        info!("Registered asset {:?}", asset_metadata2);
-
-        handler
-    }
-
-    pub fn serve<C: Connection>(
-        connection: &mut C,
-        request: C::Request,
-        asset: &'static Asset,
-    ) -> HandlerResult {
-        serve_asset_data(connection, request, AssetMetadata::derive(asset.0), asset.1)
+    pub fn serve<C: Connection>(request: Request<C>, asset: &'static Asset) -> HandlerResult {
+        serve_asset_data(request, AssetMetadata::derive(asset.0), asset.1)
     }
 
     pub fn serve_asset_data<C: Connection>(
-        connection: &mut C,
-        request: C::Request,
+        request: Request<C>,
         asset_metadata: AssetMetadata<'static>,
         data: &'static [u8],
     ) -> HandlerResult {
@@ -166,9 +84,9 @@ pub mod serve {
             headers.set_content_type(content_type);
         }
 
-        let mut response = connection.into_response(request, 200, None, headers.as_slice())?;
+        let mut response = request.into_response(200, None, headers.as_slice())?;
 
-        connection.writer(&mut response).write_all(data)?;
+        response.write_all(data)?;
 
         Ok(())
     }
@@ -176,111 +94,44 @@ pub mod serve {
     pub mod asynch {
         use core::future::Future;
 
-        use embedded_svc::io::asynch::Write;
-        use log::info;
-
-        use embedded_svc::http::server::asynch::{Connection, Handler, HandlerResult};
-        use embedded_svc::utils::http::server::registration::asynch::{
-            HandlerRegistration, ServerHandler, SimpleHandlerRegistration,
-        };
+        use embedded_svc::http::server::asynch::{Connection, Handler, HandlerResult, Request};
         use embedded_svc::utils::http::Headers;
 
-        pub use super::{Asset, AssetMetadata, AssetsHandlerRegistration};
+        use embedded_svc::io::asynch::Write;
 
-        impl<'b, N, C> HandlerRegistration<C> for AssetsHandlerRegistration<'b, N>
-        where
-            N: HandlerRegistration<C>,
-            C: Connection,
-        {
-            type HandleFuture<'a> = impl Future<Output = HandlerResult>
-            where
-                Self: 'a,
-                C: 'a;
+        pub use super::{Asset, AssetMetadata};
 
-            fn handle<'a>(
-                &'a self,
-                mut path_registered: bool,
-                path: &'a str,
-                method: embedded_svc::http::Method,
-                connection: &'a mut C,
-                request: <C as Connection>::Request,
-            ) -> Self::HandleFuture<'a> {
+        pub struct AssetHandler(AssetMetadata<'static>, &'static [u8]);
+
+        impl AssetHandler {
+            pub const fn new(metadata: AssetMetadata<'static>, data: &'static [u8]) -> Self {
+                Self(metadata, data)
+            }
+
+            pub fn from_asset(asset: &'static Asset) -> Self {
+                Self(AssetMetadata::derive(asset.0), asset.1)
+            }
+        }
+
+        impl<C: Connection> Handler<C> for AssetHandler {
+            type HandleFuture<'a> = impl Future<Output = HandlerResult> where Self: 'a, C: 'a;
+
+            fn handle<'a>(&'a self, connection: C) -> Self::HandleFuture<'a> {
                 async move {
-                    for (uri, data) in self.assets {
-                        let asset_metadata = AssetMetadata::derive(uri);
-
-                        if path == asset_metadata.uri {
-                            path_registered = true;
-
-                            if method == embedded_svc::http::Method::Get {
-                                return serve_asset_data(connection, request, asset_metadata, data)
-                                    .await;
-                            }
-                        }
-                    }
-
-                    self.next
-                        .handle(path_registered, path, method, connection, request)
-                        .await
+                    serve_asset_data(Request::wrap(connection)?, self.0.clone(), &self.1).await
                 }
             }
-        }
-
-        pub fn register_assets<'a, C, N>(
-            handler: ServerHandler<N>,
-            assets: &'a [Asset],
-        ) -> ServerHandler<AssetsHandlerRegistration<'a, N>>
-        where
-            C: Connection,
-        {
-            ServerHandler::new(AssetsHandlerRegistration::new(assets, handler.release()))
-        }
-
-        pub fn register_asset<C, N>(
-            handler: ServerHandler<N>,
-            asset_metadata: AssetMetadata<'static>,
-            data: &'static [u8],
-        ) -> ServerHandler<SimpleHandlerRegistration<impl Handler<C>, N>>
-        where
-            C: Connection,
-        {
-            let asset_metadata2 = asset_metadata.clone();
-
-            struct ServeAssetDataHandler(AssetMetadata<'static>, &'static [u8]);
-
-            impl<C: Connection> Handler<C> for ServeAssetDataHandler {
-                type HandleFuture<'a> = impl Future<Output = HandlerResult> where Self: 'a, C: 'a;
-
-                fn handle<'a>(
-                    &'a self,
-                    connection: &'a mut C,
-                    request: C::Request,
-                ) -> Self::HandleFuture<'a> {
-                    async move { serve_asset_data(connection, request, self.0.clone(), &self.1).await }
-                }
-            }
-
-            let handler = handler.register_get::<C, _>(
-                asset_metadata.uri,
-                ServeAssetDataHandler(asset_metadata, data),
-            );
-
-            info!("Registered asset {:?}", asset_metadata2);
-
-            handler
         }
 
         pub async fn serve<C: Connection>(
-            connection: &mut C,
-            request: C::Request,
+            request: Request<C>,
             asset: &'static Asset,
         ) -> HandlerResult {
-            serve_asset_data(connection, request, AssetMetadata::derive(asset.0), asset.1).await
+            serve_asset_data(request, AssetMetadata::derive(asset.0), asset.1).await
         }
 
         pub async fn serve_asset_data<C: Connection>(
-            connection: &mut C,
-            request: C::Request,
+            request: Request<C>,
             asset_metadata: AssetMetadata<'static>,
             data: &'static [u8],
         ) -> HandlerResult {
@@ -298,11 +149,9 @@ pub mod serve {
                 headers.set_content_type(content_type);
             }
 
-            let mut response = connection
-                .into_response(request, 200, None, headers.as_slice())
-                .await?;
+            let mut response = request.into_response(200, None, headers.as_slice()).await?;
 
-            connection.writer(&mut response).write_all(data).await?;
+            response.write_all(data).await?;
 
             Ok(())
         }
