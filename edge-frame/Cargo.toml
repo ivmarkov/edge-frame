@@ -13,6 +13,7 @@ license = "MIT OR Apache-2.0"
 [features]
 default = ["web", "wee_alloc"]
 web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "strum", "embedded-svc", "embedded-svc/std", "embedded-svc/use_serde", "embedded-svc/use_strum", "embedded-svc/use_numenum"]
+nightly = ["embedded-svc?/nightly"]
 assets-serve = ["heapless", "log", "embedded-svc", "embedded-svc/experimental"]
 assets-prepare = ["anyhow", "flate2"]
 
