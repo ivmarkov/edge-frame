@@ -1,7 +1,13 @@
 #![allow(clippy::let_unit_value)]
 #![cfg_attr(feature = "assets-serve", no_std)]
-#![cfg_attr(feature = "assets-serve", feature(generic_associated_types))]
-#![cfg_attr(feature = "assets-serve", feature(type_alias_impl_trait))]
+#![cfg_attr(
+    all(feature = "nightly", feature = "assets-serve"),
+    feature(generic_associated_types)
+)]
+#![cfg_attr(
+    all(feature = "nightly", feature = "assets-serve"),
+    feature(type_alias_impl_trait)
+)]
 #![cfg_attr(feature = "web", recursion_limit = "1024")]
 
 #[cfg(any(
