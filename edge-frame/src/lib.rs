@@ -41,3 +41,6 @@ mod main {
 
 #[cfg(any(feature = "assets-serve", feature = "assets-prepare"))]
 pub mod assets;
+
+#[cfg(feature = "dto")]
+pub mod dto;

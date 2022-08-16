@@ -1,10 +1,10 @@
 use yew::prelude::*;
 
-use embedded_svc::utils::role::Role;
-
 use crate::field::Field;
 use crate::loading::*;
 use crate::util::if_true;
+
+use crate::dto::Role;
 
 #[derive(Properties, Clone, Default, Debug, PartialEq)]
 pub struct AuthProps {

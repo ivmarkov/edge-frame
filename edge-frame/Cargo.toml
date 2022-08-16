@@ -12,9 +12,10 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["web", "wee_alloc"]
-web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "strum", "embedded-svc", "embedded-svc/std", "embedded-svc/use_serde", "embedded-svc/use_strum", "embedded-svc/use_numenum"]
+web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "dto", "embedded-svc/std"]
 nightly = ["embedded-svc?/nightly"]
-assets-serve = ["heapless", "log", "embedded-svc", "embedded-svc/experimental"]
+dto = ["serde", "enumset", "strum", "strum_macros", "num_enum", "embedded-svc"]
+assets-serve = ["heapless", "log", "dto"]
 assets-prepare = ["anyhow", "flate2"]
 
 [dependencies]
@@ -27,8 +28,12 @@ wee_alloc = { version = "0.4", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
 yew = { version = "0.19", optional = true, default-features = false }
 yew-router = { version = "0.16", optional = true }
-strum = { version = "0.23", optional = true }
-#embedded-svc = { version = "0.22", optional = true, default-features = false }
-embedded-svc = { version = "0.22", git = "https://github.com/esp-rs/embedded-svc", branch = "next", optional = true }
-#embedded-svc = { version = "0.22", path = "../../embedded-svc", optional = true }
+serde = { version = "1", default-features = false, optional = true, features = ["derive"] }
+enumset = { version = "1", default-features = false, optional = true, features = ["serde"] }
+strum = { version = "0.23", default-features = false, optional = true, features = ["derive"] }
+strum_macros = { version = "0.23", optional = true }
+num_enum = { version = "0.5", default-features = false, optional = true }
+#embedded-svc = { version = "0.22", optional = true, default-features = false, features = ["experimental", "use_serde", "use_strum", "use_numenum"] }
+embedded-svc = { version = "0.22", git = "https://github.com/esp-rs/embedded-svc", branch = "next", optional = true, default-features = false, features = ["experimental", "use_serde", "use_strum", "use_numenum"] }
+#embedded-svc = { version = "0.22", path = "../../embedded-svc", optional = true, default-features = false, features = ["experimental", "use_serde", "use_strum", "use_numenum"] }
 flate2 = { version = "1", optional = true }
