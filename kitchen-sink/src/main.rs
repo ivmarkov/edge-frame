@@ -22,7 +22,7 @@ impl AppState {
     pub fn new() -> Self {
         //Default::default()
         Self {
-            role: Rc::new(ValueState::new(RoleStateValue::Role(RoleValue::Admin))),
+            role: Rc::new(ValueState::new(RoleStateValue::Role(RoleDto::Admin))),
             wifi: Rc::new(ValueState::new(Some(Default::default()))),
         }
     }
@@ -90,15 +90,15 @@ fn render(route: &Routes) -> Html {
             app_title="EDGE FRAME"
             app_url="https://github.com/ivmarkov/edge-frame">
             <Nav>
-                <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
+                <Role<AppState> role={RoleDto::Admin} projection={AppState::role()}>
                     <RouteNavItem<Routes> text="Home" icon="fa-solid fa-house" route={Routes::Home}/>
                 </Role<AppState>>
-                <Role<AppState> role={RoleValue::Admin} projection={AppState::role()}>
+                <Role<AppState> role={RoleDto::Admin} projection={AppState::role()}>
                     <WifiNavItem<Routes> route={Routes::Wifi}/>
                 </Role<AppState>>
             </Nav>
             <Status>
-                <Role<AppState> role={RoleValue::User} projection={AppState::role()}>
+                <Role<AppState> role={RoleDto::User} projection={AppState::role()}>
                     <WifiStatusItem<Routes, AppState> route={Routes::Wifi} projection={AppState::wifi()}/>
                 </Role<AppState>>
                 <RoleLogoutStatusItem<Routes, AppState> auth_status_route={Routes::AuthState} projection={AppState::role()}/>
@@ -107,7 +107,7 @@ fn render(route: &Routes) -> Html {
                 {
                     match route {
                         Routes::Home => html! {
-                            <Role<AppState> role={RoleValue::User} projection={AppState::role()} auth=true>
+                            <Role<AppState> role={RoleDto::User} projection={AppState::role()} auth=true>
                                 {"Hello, world!"}
                             </Role<AppState>>
                         },
@@ -115,7 +115,7 @@ fn render(route: &Routes) -> Html {
                             <RoleAuthState<Routes, AppState> home={Some(Routes::Home)} projection={AppState::role()}/>
                         },
                         Routes::Wifi => html! {
-                            <Role<AppState> role={RoleValue::Admin} projection={AppState::role()} auth=true>
+                            <Role<AppState> role={RoleDto::Admin} projection={AppState::role()} auth=true>
                                 <Wifi<AppState> projection={AppState::wifi()}/>
                             </Role<AppState>>
                         },

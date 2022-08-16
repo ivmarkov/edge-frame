@@ -1,5 +1,3 @@
-pub use embedded_svc::utils::role::Role as RoleValue;
-
 use yew::prelude::*;
 use yew_router::prelude::*;
 
@@ -7,6 +5,8 @@ use crate::auth::*;
 use crate::frame::*;
 use crate::loading::*;
 use crate::redust::{use_projection, Projection, Reducible2, ValueAction, ValueState};
+
+pub use crate::dto::Role as RoleDto;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Credentials {
@@ -19,8 +19,8 @@ pub enum RoleStateValue {
     Unknown,
     Authenticating(Credentials),
     AuthenticationFailed(Credentials),
-    Role(embedded_svc::utils::role::Role),
-    LoggingOut(embedded_svc::utils::role::Role),
+    Role(RoleDto),
+    LoggingOut(RoleDto),
     LoggedOut,
 }
 
@@ -35,7 +35,7 @@ pub type RoleState = ValueState<RoleStateValue>;
 
 #[derive(Properties, Clone, Debug, PartialEq)]
 pub struct RoleProps<R: Reducible2> {
-    pub role: RoleValue,
+    pub role: RoleDto,
     pub projection: Projection<R, RoleState, RoleAction>,
 
     #[prop_or_default]
@@ -64,7 +64,7 @@ pub fn role<R: Reducible2>(props: &RoleProps<R>) -> Html {
         }
         (RoleStateValue::AuthenticationFailed(credentials), _)
         | (RoleStateValue::Authenticating(credentials), _)
-        | (RoleStateValue::Role(RoleValue::None), credentials)
+        | (RoleStateValue::Role(RoleDto::None), credentials)
             if props.auth =>
         {
             // Not authenticated yet or previous authentication attempt failed => render login dialog if auth=true
@@ -116,9 +116,7 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static, S: Red
     let history = use_history();
 
     match &**role {
-        RoleStateValue::Role(role_value)
-            if *role_value >= embedded_svc::utils::role::Role::None =>
-        {
+        RoleStateValue::Role(role_value) if *role_value >= crate::dto::Role::None => {
             let selected = {
                 let auth_status_route = props.auth_status_route.clone();
                 let role_value = *role_value;
