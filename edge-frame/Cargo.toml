@@ -14,8 +14,8 @@ license = "MIT OR Apache-2.0"
 default = ["web", "wee_alloc"]
 web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "dto", "embedded-svc/std"]
 nightly = ["embedded-svc?/nightly"]
-dto = ["serde", "enumset", "strum", "strum_macros", "num_enum", "embedded-svc"]
-assets-serve = ["heapless", "log", "dto"]
+dto = ["serde", "enumset", "strum", "strum_macros", "num_enum"]
+assets-serve = ["heapless", "log", "embedded-svc"]
 assets-prepare = ["anyhow", "flate2"]
 
 [dependencies]
