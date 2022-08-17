@@ -1,5 +1,8 @@
 #![allow(clippy::let_unit_value)]
-#![cfg_attr(feature = "assets-serve", no_std)]
+#![cfg_attr(
+    any(feature = "assets-serve", all(feature = "dto", not(feature = "web"))),
+    no_std
+)]
 #![cfg_attr(
     all(feature = "nightly", feature = "assets-serve"),
     feature(generic_associated_types)
@@ -11,23 +14,23 @@
 #![cfg_attr(feature = "web", recursion_limit = "1024")]
 
 #[cfg(any(
-    all(feature = "assets-serve", feature = "assets-prepare"),
-    all(
-        feature = "web",
-        any(feature = "assets-serve", feature = "assets-prepare")
-    ),
-    not(any(feature = "web", feature = "assets-serve", feature = "assets-prepare"))
+    all(feature = "assets-prepare", feature = "assets-serve"),
+    all(feature = "assets-prepare", feature = "web"),
+    all(feature = "assets-prepare", feature = "dto")
 ))]
 compile_error!(
-    "Exactly one of the features `web', `assets-serve` or `assets-prepare` must be selected."
+    "Feature `assets-prepare` is not compatible with features `assets-serve`, `web` and `dto`."
 );
 
-#[cfg(not(any(feature = "assets-serve", feature = "assets-prepare")))]
-pub use main::*;
+#[cfg(all(feature = "assets-serve", feature = "web"))]
+compile_error!("Feature `assets-serve` is not compatible with feature `web`.");
 
-#[cfg(not(any(feature = "assets-serve", feature = "assets-prepare")))]
+#[cfg(feature = "web")]
+pub use web::*;
+
+#[cfg(feature = "web")]
 #[path = "."]
-mod main {
+mod web {
     pub mod auth;
     pub mod callback2;
     pub mod field;
