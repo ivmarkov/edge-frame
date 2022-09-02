@@ -258,12 +258,19 @@ pub mod prepare {
         };
 
         for (index, output_file) in output_files.iter().enumerate() {
-            println!(
-                "cargo:rustc-env={}_EDGE_FRAME_ASSET_URI_{}=/{}",
-                module,
-                index,
-                output_file.file_name().unwrap().to_str().unwrap()
-            );
+            let file_name = output_file.file_name().unwrap().to_str().unwrap();
+
+            if file_name == "__empty__" {
+                println!("cargo:rustc-env={}_EDGE_FRAME_ASSET_URI_{}=", module, index,);
+            } else {
+                println!(
+                    "cargo:rustc-env={}_EDGE_FRAME_ASSET_URI_{}=/{}",
+                    module,
+                    index,
+                    output_file.file_name().unwrap().to_str().unwrap()
+                );
+            }
+
             println!(
                 "cargo:rustc-env={}_EDGE_FRAME_ASSET_DATA_{}={}",
                 module,
