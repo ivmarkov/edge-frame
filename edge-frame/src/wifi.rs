@@ -16,6 +16,23 @@ use crate::frame::{RouteNavItem, RouteStatusItem};
 use crate::redust::{use_projection, Projection, Reducible2, ValueAction, ValueState};
 use crate::util::*;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WifiConf {
+    configuration: Configuration,
+    ap_ip_conf: Option<ipv4::RouterConfiguration>,
+    sta_ip_conf: Option<ipv4::ClientConfiguration>,
+}
+
+impl Default for WifiConf {
+    fn default() -> Self {
+        Self {
+            configuration: Configuration::Mixed(Default::default(), Default::default()),
+            ap_ip_conf: Some(Default::default()),
+            sta_ip_conf: Some(Default::default()),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub enum EditScope {
@@ -64,8 +81,8 @@ pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Reducible2
     }
 }
 
-pub type WifiAction = ValueAction<Option<Configuration>>;
-pub type WifiState = ValueState<Option<Configuration>>;
+pub type WifiAction = ValueAction<Option<WifiConf>>;
+pub type WifiState = ValueState<Option<WifiConf>>;
 
 #[derive(Properties, Clone, Debug, PartialEq)]
 pub struct WifiProps<R: Reducible2> {
@@ -83,8 +100,16 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
     let mut ap_conf_form = ApConfForm::new();
     let mut sta_conf_form = StaConfForm::new();
 
-    ap_conf_form.update(conf.and_then(|c| c.as_ap_conf_ref()));
-    sta_conf_form.update(conf.and_then(|c| c.as_client_conf_ref()));
+    ap_conf_form.update(conf.and_then(|c| {
+        c.configuration
+            .as_ap_conf_ref()
+            .map(|ac| (ac, c.ap_ip_conf.as_ref()))
+    }));
+    sta_conf_form.update(conf.and_then(|c| {
+        c.configuration
+            .as_client_conf_ref()
+            .map(|cc| (cc, c.sta_ip_conf.as_ref()))
+    }));
 
     let onclick = {
         let conf_store = conf_store.clone();
@@ -93,13 +118,13 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
         let ap_conf_form = ap_conf_form.clone();
 
         Callback::from(move |_| {
-            if let Some(sta_conf) = sta_conf_form.get() {
-                if let Some(ap_conf) = ap_conf_form.get() {
-                    let mut new_conf: Configuration = Default::default();
-
-                    let (sta, ap) = new_conf.as_mixed_conf_mut();
-                    *sta = sta_conf;
-                    *ap = ap_conf;
+            if let Some((sta_conf, sta_ip_conf)) = sta_conf_form.get() {
+                if let Some((ap_conf, ap_ip_conf)) = ap_conf_form.get() {
+                    let new_conf = WifiConf {
+                        configuration: Configuration::Mixed(sta_conf, ap_conf),
+                        sta_ip_conf,
+                        ap_ip_conf,
+                    };
 
                     conf_store.dispatch(ValueAction::Update(Some(new_conf)));
                 }
@@ -171,8 +196,10 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
                 conf.is_none()
                 || ap_conf_form.has_errors()
                 || sta_conf_form.has_errors()
-                || conf.as_ref().and_then(|conf| conf.as_ap_conf_ref()) == ap_conf_form.get().as_ref()
-                    && conf.as_ref().and_then(|conf| conf.as_client_conf_ref()) == sta_conf_form.get().as_ref()
+                || conf.as_ref().and_then(|conf| conf.configuration.as_ap_conf_ref()) == ap_conf_form.get().as_ref().and_then(|c| Some(&c.0))
+                    && conf.as_ref().and_then(|conf| conf.ap_ip_conf.as_ref()) == ap_conf_form.get().as_ref().and_then(|c| c.1.as_ref())
+                    && conf.as_ref().and_then(|conf| conf.configuration.as_client_conf_ref()) == sta_conf_form.get().as_ref().map(|c| &c.0)
+                    && conf.as_ref().and_then(|conf| conf.sta_ip_conf.as_ref()) == sta_conf_form.get().as_ref().and_then(|c| c.1.as_ref())
             }
             {onclick}
         />
@@ -275,61 +302,65 @@ impl ApConfForm {
                     || self.secondary_dns.is_dirty())
     }
 
-    fn get(&self) -> Option<AccessPointConfiguration> {
+    fn get(&self) -> Option<(AccessPointConfiguration, Option<ipv4::RouterConfiguration>)> {
         if self.has_errors() {
             None
         } else {
-            Some(AccessPointConfiguration {
-                ssid: self.ssid.value().unwrap().as_str().into(),
-                ssid_hidden: self.hidden_ssid.value().unwrap(),
+            Some((
+                AccessPointConfiguration {
+                    ssid: self.ssid.value().unwrap().as_str().into(),
+                    ssid_hidden: self.hidden_ssid.value().unwrap(),
 
-                auth_method: self.auth.value().unwrap(),
-                password: self.password.value().unwrap_or_default().as_str().into(),
-
-                ip_conf: if self.ip_conf_enabled.value().unwrap() {
+                    auth_method: self.auth.value().unwrap(),
+                    password: self.password.value().unwrap_or_default().as_str().into(),
+                    ..Default::default()
+                },
+                if self.ip_conf_enabled.value().unwrap() {
                     Some(RouterConfiguration {
                         dhcp_enabled: self.dhcp_server_enabled.value().unwrap(),
                         subnet: self.subnet.value().unwrap(),
                         dns: self.dns.value().unwrap(),
                         secondary_dns: self.secondary_dns.value().unwrap(),
+                        ..Default::default()
                     })
                 } else {
                     None
                 },
-
-                ..Default::default()
-            })
+            ))
         }
     }
 
-    fn update(&mut self, conf: Option<&AccessPointConfiguration>) {
-        let dconf = Default::default();
-        let conf = conf.unwrap_or(&dconf);
+    fn update(
+        &mut self,
+        conf: Option<(
+            &AccessPointConfiguration,
+            Option<&ipv4::RouterConfiguration>,
+        )>,
+    ) {
+        let dconf = (Default::default(), Some(Default::default()));
+        let conf = conf.unwrap_or((&dconf.0, dconf.1.as_ref()));
 
-        self.ssid.update(conf.ssid.as_str().to_owned());
-        self.hidden_ssid.update(conf.ssid_hidden);
+        self.ssid.update(conf.0.ssid.as_str().to_owned());
+        self.hidden_ssid.update(conf.0.ssid_hidden);
 
-        self.auth.update(conf.auth_method.to_string());
-        self.password.update(conf.password.as_str().to_owned());
+        self.auth.update(conf.0.auth_method.to_string());
+        self.password.update(conf.0.password.as_str().to_owned());
         self.password_confirm
-            .update(conf.password.as_str().to_owned());
+            .update(conf.0.password.as_str().to_owned());
 
-        self.ip_conf_enabled.update(conf.ip_conf.is_some());
+        self.ip_conf_enabled.update(conf.1.is_some());
 
         self.dhcp_server_enabled
-            .update(conf.ip_conf.map(|i| i.dhcp_enabled).unwrap_or(false));
-        self.subnet.update(
-            conf.ip_conf
-                .map(|i| i.subnet.to_string())
-                .unwrap_or_default(),
-        );
+            .update(conf.1.map(|i| i.dhcp_enabled).unwrap_or(false));
+        self.subnet
+            .update(conf.1.map(|i| i.subnet.to_string()).unwrap_or_default());
         self.dns.update(
-            conf.ip_conf
+            conf.1
                 .and_then(|i| i.dns.map(|d| d.to_string()))
                 .unwrap_or_default(),
         );
         self.secondary_dns.update(
-            conf.ip_conf
+            conf.1
                 .and_then(|i| i.secondary_dns.map(|d| d.to_string()))
                 .unwrap_or_default(),
         );
@@ -616,17 +647,19 @@ impl StaConfForm {
                             || self.secondary_dns.is_dirty()))
     }
 
-    fn get(&self) -> Option<ClientConfiguration> {
+    fn get(&self) -> Option<(ClientConfiguration, Option<ipv4::ClientConfiguration>)> {
         if self.has_errors() {
             None
         } else {
-            Some(ClientConfiguration {
-                ssid: self.ssid.value().unwrap().as_str().into(),
+            Some((
+                ClientConfiguration {
+                    ssid: self.ssid.value().unwrap().as_str().into(),
 
-                auth_method: self.auth.value().unwrap(),
-                password: self.password.value().unwrap_or_default().as_str().into(),
-
-                ip_conf: if self.ip_conf_enabled.value().unwrap() {
+                    auth_method: self.auth.value().unwrap(),
+                    password: self.password.value().unwrap_or_default().as_str().into(),
+                    ..Default::default()
+                },
+                if self.ip_conf_enabled.value().unwrap() {
                     Some(if self.dhcp_enabled.value().unwrap() {
                         ipv4::ClientConfiguration::DHCP(DHCPClientSettings { hostname: None })
                     } else {
@@ -635,48 +668,46 @@ impl StaConfForm {
                             ip: self.ip.value().unwrap(),
                             dns: self.dns.value().unwrap(),
                             secondary_dns: self.secondary_dns.value().unwrap(),
+                            ..Default::default()
                         })
                     })
                 } else {
                     None
                 },
-
-                ..Default::default()
-            })
+            ))
         }
     }
 
-    fn update(&mut self, conf: Option<&ClientConfiguration>) {
-        let dconf = Default::default();
-        let conf = conf.unwrap_or(&dconf);
+    fn update(&mut self, conf: Option<(&ClientConfiguration, Option<&ipv4::ClientConfiguration>)>) {
+        let dconf = (Default::default(), Some(Default::default()));
+        let conf = conf.unwrap_or((&dconf.0, dconf.1.as_ref()));
 
-        self.ssid.update(conf.ssid.as_str().to_owned());
+        self.ssid.update(conf.0.ssid.as_str().to_owned());
 
-        self.auth.update(conf.auth_method.to_string());
-        self.password.update(conf.password.as_str().to_owned());
+        self.auth.update(conf.0.auth_method.to_string());
+        self.password.update(conf.0.password.as_str().to_owned());
         self.password_confirm
-            .update(conf.password.as_str().to_owned());
+            .update(conf.0.password.as_str().to_owned());
 
-        self.ip_conf_enabled.update(conf.ip_conf.is_some());
+        self.ip_conf_enabled.update(conf.1.is_some());
 
         self.dhcp_enabled.update(
-            conf.ip_conf
-                .as_ref()
+            conf.1
                 .map(|i| matches!(i, ipv4::ClientConfiguration::DHCP(_)))
                 .unwrap_or(false),
         );
         self.subnet.update(
-            conf.as_ip_conf_ref()
+            conf.1
                 .and_then(|i| i.as_fixed_settings_ref().map(|i| i.subnet.to_string()))
                 .unwrap_or_default(),
         );
         self.ip.update(
-            conf.as_ip_conf_ref()
+            conf.1
                 .and_then(|i| i.as_fixed_settings_ref().map(|i| i.ip.to_string()))
                 .unwrap_or_default(),
         );
         self.dns.update(
-            conf.as_ip_conf_ref()
+            conf.1
                 .and_then(|i| {
                     i.as_fixed_settings_ref()
                         .and_then(|i| i.dns.map(|d| d.to_string()))
@@ -684,7 +715,7 @@ impl StaConfForm {
                 .unwrap_or_default(),
         );
         self.secondary_dns.update(
-            conf.as_ip_conf_ref()
+            conf.1
                 .and_then(|i| {
                     i.as_fixed_settings_ref()
                         .and_then(|i| i.secondary_dns.map(|d| d.to_string()))
