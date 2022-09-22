@@ -196,7 +196,7 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
                 conf.is_none()
                 || ap_conf_form.has_errors()
                 || sta_conf_form.has_errors()
-                || conf.as_ref().and_then(|conf| conf.configuration.as_ap_conf_ref()) == ap_conf_form.get().as_ref().and_then(|c| Some(&c.0))
+                || conf.as_ref().and_then(|conf| conf.configuration.as_ap_conf_ref()) == ap_conf_form.get().as_ref().map(|c| &c.0)
                     && conf.as_ref().and_then(|conf| conf.ap_ip_conf.as_ref()) == ap_conf_form.get().as_ref().and_then(|c| c.1.as_ref())
                     && conf.as_ref().and_then(|conf| conf.configuration.as_client_conf_ref()) == sta_conf_form.get().as_ref().map(|c| &c.0)
                     && conf.as_ref().and_then(|conf| conf.sta_ip_conf.as_ref()) == sta_conf_form.get().as_ref().and_then(|c| c.1.as_ref())
@@ -321,7 +321,6 @@ impl ApConfForm {
                         subnet: self.subnet.value().unwrap(),
                         dns: self.dns.value().unwrap(),
                         secondary_dns: self.secondary_dns.value().unwrap(),
-                        ..Default::default()
                     })
                 } else {
                     None
@@ -668,7 +667,6 @@ impl StaConfForm {
                             ip: self.ip.value().unwrap(),
                             dns: self.dns.value().unwrap(),
                             secondary_dns: self.secondary_dns.value().unwrap(),
-                            ..Default::default()
                         })
                     })
                 } else {
