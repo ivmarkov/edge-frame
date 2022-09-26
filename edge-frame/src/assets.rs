@@ -61,7 +61,7 @@ pub mod serve {
         };
     }
 
-    pub fn serve<C: Connection>(request: Request<C>, asset: &'static Asset) -> HandlerResult {
+    pub fn serve<C: Connection>(request: Request<C>, asset: Asset) -> HandlerResult {
         serve_asset_data(request, AssetMetadata::derive(asset.0), asset.1)
     }
 
@@ -124,10 +124,7 @@ pub mod serve {
             }
         }
 
-        pub async fn serve<C: Connection>(
-            request: Request<C>,
-            asset: &'static Asset,
-        ) -> HandlerResult {
+        pub async fn serve<C: Connection>(request: Request<C>, asset: Asset) -> HandlerResult {
             serve_asset_data(request, AssetMetadata::derive(asset.0), asset.1).await
         }
 
