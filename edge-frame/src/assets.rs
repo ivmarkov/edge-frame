@@ -179,7 +179,7 @@ pub mod serve {
             };
 
             let (uri, cache_control) = if uri.eq_ignore_ascii_case("/index.html") {
-                ("", "no-store")
+                ("/", "no-store")
             } else {
                 (uri, "public, max-age=31536000")
             };
