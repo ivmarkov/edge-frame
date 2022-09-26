@@ -1,4 +1,4 @@
-const MAX_ASSETS: usize = 10;
+pub const MAX_ASSETS: usize = 10;
 
 #[cfg(feature = "assets-serve")]
 pub mod serve {
