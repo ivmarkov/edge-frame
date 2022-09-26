@@ -172,13 +172,13 @@ pub mod serve {
 
             let suffix = split.next_back().unwrap_or("");
 
-            let (name, content_encoding) = if suffix.eq_ignore_ascii_case("gz") {
+            let (uri, content_encoding) = if suffix.eq_ignore_ascii_case("gz") {
                 (&uri[..uri.len() - 3], Some("gzip"))
             } else {
                 (uri, None)
             };
 
-            let (uri, cache_control) = if name.eq_ignore_ascii_case("/index.html") {
+            let (uri, cache_control) = if uri.eq_ignore_ascii_case("/index.html") {
                 ("", "no-store")
             } else {
                 (uri, "public, max-age=31536000")
