@@ -109,7 +109,7 @@ pub mod serve {
                 Self(metadata, data)
             }
 
-            pub fn from_asset(asset: &'static Asset) -> Self {
+            pub fn from_asset(asset: Asset) -> Self {
                 Self(AssetMetadata::derive(asset.0), asset.1)
             }
         }
