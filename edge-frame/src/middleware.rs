@@ -26,14 +26,16 @@ use ws::*;
 
 pub type RequestId = u32;
 
-pub fn apply_middleware<S, E, R>(
+pub fn apply_middleware<S, R, E>(
     store: UseStoreHandle<S>,
+    to_request: impl Fn(&S::Action, RequestId) -> Option<R> + 'static,
+    from_event: impl Fn(&UseStoreHandle<S>, &E) -> Option<S::Action> + 'static,
     channel: (Rc<RefCell<WebSender<R>>>, Rc<RefCell<WebReceiver<E>>>),
 ) -> anyhow::Result<UseStoreHandle<S>>
 where
     S: Reducible + Clone + Debug + 'static,
-    S::Action: for<'a> From<(&'a UseStoreHandle<S>, &'a E)> + Debug,
-    R: for<'a> From<(&'a S::Action, RequestId)> + Serialize + Debug + 'static,
+    S::Action: Debug,
+    R: Serialize + Debug + 'static,
     E: DeserializeOwned + Debug + 'static,
 {
     let (sender, receiver) = channel;
@@ -42,27 +44,28 @@ where
 
     let store = store.apply(log(Level::Info));
 
-    receive(receiver, store.clone());
+    receive(receiver, from_event, store.clone());
 
-    let store = store.apply(send(sender.clone(), request_id_gen));
+    let store = store.apply(send(sender.clone(), to_request, request_id_gen));
 
     Ok(store)
 }
 
 fn send<S, R>(
     sender: Rc<RefCell<WebSender<R>>>,
+    to_request: impl Fn(&S::Action, RequestId) -> Option<R> + 'static,
     request_id_gen: Rc<RefCell<RequestId>>,
 ) -> impl Fn(StoreProvider<S>, S::Action, Rc<dyn Fn(StoreProvider<S>, S::Action)>)
 where
     S: Reducible + Clone + Debug,
-    R: for<'a> From<(&'a S::Action, RequestId)> + Serialize + Debug + 'static,
+    R: Serialize + Debug + 'static,
 {
     move |store, action, dispatcher| {
         let mut request_id_gen = request_id_gen.borrow_mut();
         let request_id = *request_id_gen;
         *request_id_gen += 1;
 
-        if let Some(request) = Some((&action, request_id).into()) {
+        if let Some(request) = to_request(&action, request_id) {
             info!("Sending request: {:?}", request);
 
             let sender = sender.clone();
@@ -76,10 +79,13 @@ where
     }
 }
 
-fn receive<S, E>(receiver: Rc<RefCell<WebReceiver<E>>>, store: UseStoreHandle<S>)
-where
+fn receive<S, E>(
+    receiver: Rc<RefCell<WebReceiver<E>>>,
+    from_event: impl Fn(&UseStoreHandle<S>, &E) -> Option<S::Action> + 'static,
+    store: UseStoreHandle<S>,
+) where
     S: Reducible + Clone + Debug + 'static,
-    S::Action: for<'a> From<(&'a UseStoreHandle<S>, &'a E)> + Debug,
+    S::Action: Debug,
     E: DeserializeOwned + Debug + 'static,
 {
     let store_ref = use_mut_ref(|| None);
@@ -89,7 +95,7 @@ where
     use_effect_with_deps(
         move |_| {
             spawn_local(async move {
-                receive_async(&mut receiver.borrow_mut(), store_ref)
+                receive_async(&mut receiver.borrow_mut(), &from_event, store_ref)
                     .await
                     .unwrap();
             });
@@ -102,12 +108,13 @@ where
 
 async fn receive_async<S, E>(
     receiver: &mut WebReceiver<E>,
+    from_event: impl Fn(&UseStoreHandle<S>, &E) -> Option<S::Action>,
     store_ref: Rc<RefCell<Option<UseStoreHandle<S>>>>,
 ) -> anyhow::Result<()>
 where
     S: Reducible + Clone + Debug + 'static,
-    S::Action: for<'a> From<(&'a UseStoreHandle<S>, &'a E)> + Debug,
-    E: DeserializeOwned + Debug,
+    S::Action: Debug,
+    E: DeserializeOwned + Debug + 'static,
 {
     loop {
         let event = receiver.recv().await?;
@@ -116,7 +123,7 @@ where
 
         let store_borrow = store_ref.borrow();
         let store: &UseStoreHandle<S> = &store_borrow.as_ref().unwrap();
-        if let Some(action) = Some((store, &event).into()) {
+        if let Some(action) = from_event(store, &event) {
             store.dispatch(action);
         }
     }
