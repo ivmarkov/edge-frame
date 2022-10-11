@@ -13,6 +13,8 @@ license = "MIT OR Apache-2.0"
 [features]
 default = ["web"]
 web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "dto", "embedded-svc/std"]
+middleware-ws = ["web", "wasm-bindgen-futures", "anyhow", "futures", "postcard", "gloo-net"]
+middleware-local = ["web", "wasm-bindgen-futures", "anyhow", "embassy-sync"]
 nightly = ["embedded-svc?/nightly"]
 dto = ["serde", "enumset", "strum", "strum_macros", "num_enum"]
 assets-serve = ["heapless", "log", "embedded-svc"]
@@ -36,3 +38,12 @@ num_enum = { version = "0.5", default-features = false, optional = true }
 embedded-svc = { version = "0.23", git = "https://github.com/esp-rs/embedded-svc", optional = true, default-features = false, features = ["experimental", "use_serde", "use_strum", "use_numenum"] }
 #embedded-svc = { version = "0.23", path = "../../embedded-svc", optional = true, default-features = false, features = ["experimental", "use_serde", "use_strum", "use_numenum"] }
 flate2 = { version = "1", optional = true }
+
+# middleware-ws
+wasm-bindgen-futures = { version = "0.4", optional = true }
+futures = { version = "0.3", optional = true }
+postcard = { version = "0.7", features = ["alloc"], optional = true }
+gloo-net = { version = "0.1", optional = true }
+
+# middleware-local
+embassy-sync = { version = "0.1", git = "https://github.com/ivmarkov/embassy", optional = true }
