@@ -24,11 +24,9 @@ pub use ws::channel;
 #[cfg(feature = "middleware-ws")]
 use ws::*;
 
-pub type RequestId = u32;
-
 pub fn apply_middleware<S, R, E>(
     store: UseStoreHandle<S>,
-    to_request: impl Fn(&S::Action, RequestId) -> Option<R> + 'static,
+    to_request: impl Fn(&S::Action) -> Option<R> + 'static,
     from_event: impl Fn(&UseStoreHandle<S>, &E) -> Option<S::Action> + 'static,
     channel: (Rc<RefCell<WebSender<R>>>, Rc<RefCell<WebReceiver<E>>>),
 ) -> anyhow::Result<UseStoreHandle<S>>
@@ -40,32 +38,25 @@ where
 {
     let (sender, receiver) = channel;
 
-    let request_id_gen = use_mut_ref(|| 0_u32);
-
     let store = store.apply(log(Level::Info));
 
     receive(receiver, from_event, store.clone());
 
-    let store = store.apply(send(sender.clone(), to_request, request_id_gen));
+    let store = store.apply(send(sender.clone(), to_request));
 
     Ok(store)
 }
 
 fn send<S, R>(
     sender: Rc<RefCell<WebSender<R>>>,
-    to_request: impl Fn(&S::Action, RequestId) -> Option<R> + 'static,
-    request_id_gen: Rc<RefCell<RequestId>>,
+    to_request: impl Fn(&S::Action) -> Option<R> + 'static,
 ) -> impl Fn(StoreProvider<S>, S::Action, Rc<dyn Fn(StoreProvider<S>, S::Action)>)
 where
     S: Reducible + Clone + Debug,
     R: Serialize + Debug + 'static,
 {
     move |store, action, dispatcher| {
-        let mut request_id_gen = request_id_gen.borrow_mut();
-        let request_id = *request_id_gen;
-        *request_id_gen += 1;
-
-        if let Some(request) = to_request(&action, request_id) {
+        if let Some(request) = to_request(&action) {
             info!("Sending request: {:?}", request);
 
             let sender = sender.clone();
