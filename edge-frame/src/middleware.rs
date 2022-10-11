@@ -201,9 +201,10 @@ mod ws {
 
     pub fn channel<R, E>(
         ws_endpoint: &'static str,
-    ) -> (Rc<RefCell<WebSender<R>>>, Rc<RefCell<WebReceiver<R>>>)
+    ) -> (Rc<RefCell<WebSender<R>>>, Rc<RefCell<WebReceiver<E>>>)
     where
         R: 'static,
+        E: 'static,
     {
         let ws = use_ref(move || {
             let (sender, receiver) = open(&format!(
