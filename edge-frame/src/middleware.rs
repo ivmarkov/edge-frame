@@ -86,7 +86,7 @@ fn receive<S, E>(
     use_effect_with_deps(
         move |_| {
             spawn_local(async move {
-                receive_async(&mut receiver.borrow_mut(), &from_event, store_ref)
+                receive_async(&mut receiver.borrow_mut(), from_event, store_ref)
                     .await
                     .unwrap();
             });
@@ -112,9 +112,8 @@ where
 
         info!("Received event: {:?}", event);
 
-        let store_borrow = store_ref.borrow();
-        let store: &UseStoreHandle<S> = &store_borrow.as_ref().unwrap();
-        if let Some(action) = from_event(store, &event) {
+        let store = store_ref.borrow().as_ref().unwrap().clone();
+        if let Some(action) = from_event(&store, &event) {
             store.dispatch(action);
         }
     }
@@ -132,14 +131,18 @@ mod local {
     use embassy_sync::channel;
 
     pub fn channel<R, E>(
-        sender: channel::DynamicSender<'static, R>,
-        receiver: channel::DynamicReceiver<'static, E>,
+        init_fn: impl Fn() -> (
+            channel::DynamicSender<'static, R>,
+            channel::DynamicReceiver<'static, E>,
+        ),
     ) -> (Rc<RefCell<WebSender<R>>>, Rc<RefCell<WebReceiver<E>>>)
     where
         R: 'static,
         E: 'static,
     {
         let ws = use_ref(move || {
+            let (sender, receiver) = init_fn();
+
             (
                 Rc::new(RefCell::new(WebSender(sender))),
                 Rc::new(RefCell::new(WebReceiver(receiver))),
