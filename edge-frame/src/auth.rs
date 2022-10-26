@@ -136,7 +136,7 @@ pub fn auth_state(props: &AuthStateProps) -> Html {
                 <div class="columns is-flex is-vcentered">
                     <div class="column is-4">
                         <div class="box has-text-centered">
-                            <h3 class="title is-3">{format!("You are logged in as {}.", role)}</h3>
+                            <h3 class="title is-3">{format!("You are logged in as {role}.")}</h3>
                         </div>
                     </div>
                 </div>
