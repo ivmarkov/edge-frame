@@ -1,6 +1,6 @@
 [package]
 name = "edge-frame"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Ivan Markov <ivan.markov@gmail.com>"]
 edition = "2018"
 resolver = "2"
@@ -12,8 +12,8 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["web"]
-web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "dto", "embedded-svc/std"]
-middleware-ws = ["web", "wasm-bindgen-futures", "anyhow", "futures", "postcard", "gloo-net"]
+web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "yewdux", "yewdux-middleware", "dto", "embedded-svc/std"]
+middleware-ws = ["web", "wasm-bindgen", "wasm-bindgen-futures", "anyhow", "futures", "postcard", "gloo-net"]
 middleware-local = ["web", "wasm-bindgen-futures", "anyhow", "embassy-sync"]
 nightly = ["embedded-svc?/nightly"]
 dto = ["serde", "enumset", "strum", "strum_macros", "num_enum"]
@@ -29,6 +29,8 @@ wasm-logger = { version = "0.2", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
 yew = { version = "0.19", optional = true, default-features = false }
 yew-router = { version = "0.16", optional = true }
+yewdux = { version = "0.8", optional = true }
+yewdux-middleware = { version = "0.1", optional = true, git = "https://github.com/ivmarkov/yewdux-middleware" }
 serde = { version = "1", default-features = false, optional = true, features = ["derive"] }
 enumset = { version = "1", default-features = false, optional = true, features = ["serde"] }
 strum = { version = "0.23", default-features = false, optional = true, features = ["derive"] }
@@ -40,6 +42,7 @@ embedded-svc = { version = "0.23", git = "https://github.com/esp-rs/embedded-svc
 flate2 = { version = "1", optional = true }
 
 # middleware-ws
+wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 futures = { version = "0.3", optional = true }
 postcard = { version = "0.7", features = ["alloc"], optional = true }

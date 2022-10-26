@@ -39,9 +39,7 @@ mod web {
     pub mod field;
     pub mod frame;
     pub mod loading;
-    #[cfg(any(feature = "middleware-ws", feature = "middleware-local"))]
     pub mod middleware;
-    pub mod redust;
     pub mod role;
     pub mod util;
     pub mod wifi;

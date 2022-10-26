@@ -1,278 +1,166 @@
-use core::cell::RefCell;
 use core::fmt::Debug;
 
-extern crate alloc;
-use alloc::rc::Rc;
+use log::{log, Level};
 
-use log::{info, Level};
-
-use serde::{de::DeserializeOwned, Serialize};
-
-use wasm_bindgen_futures::spawn_local;
-
-use yew::prelude::*;
-
-use crate::redust::*;
+use yewdux_middleware::*;
 
 #[cfg(feature = "middleware-local")]
-pub use local::channel;
-#[cfg(feature = "middleware-local")]
-use local::*;
+pub use local::*;
 
 #[cfg(feature = "middleware-ws")]
-pub use ws::channel;
-#[cfg(feature = "middleware-ws")]
-use ws::*;
+pub use ws::*;
 
-pub fn apply_middleware<S, R, E>(
-    store: UseStoreHandle<S>,
-    to_request: impl Fn(&S::Action) -> Option<R> + 'static,
-    from_event: impl Fn(&UseStoreHandle<S>, &E) -> Option<S::Action> + 'static,
-    channel: (Rc<RefCell<WebSender<R>>>, Rc<RefCell<WebReceiver<E>>>),
-) -> anyhow::Result<UseStoreHandle<S>>
+pub fn log_msg<M, D>(level: Level) -> impl Fn(M, D)
 where
-    S: Reducible + Clone + Debug + 'static,
-    S::Action: Debug,
-    R: Serialize + Debug + 'static,
-    E: DeserializeOwned + Debug + 'static,
+    M: Debug,
+    D: Dispatch<M>,
 {
-    let (sender, receiver) = channel;
+    move |msg, dispatch| {
+        log!(level, "Dispatching message: {:?}", msg);
 
-    let store = store.apply(log(Level::Info));
-
-    receive(receiver, from_event, store.clone());
-
-    let store = store.apply(send(sender.clone(), to_request));
-
-    Ok(store)
-}
-
-fn send<S, R>(
-    sender: Rc<RefCell<WebSender<R>>>,
-    to_request: impl Fn(&S::Action) -> Option<R> + 'static,
-) -> impl Fn(StoreProvider<S>, S::Action, Rc<dyn Fn(StoreProvider<S>, S::Action)>)
-where
-    S: Reducible + Clone + Debug,
-    R: Serialize + Debug + 'static,
-{
-    move |store, action, dispatcher| {
-        if let Some(request) = to_request(&action) {
-            info!("Sending request: {:?}", request);
-
-            let sender = sender.clone();
-
-            spawn_local(async move {
-                sender.borrow_mut().send(request).await.unwrap();
-            });
-        }
-
-        dispatcher(store.clone(), action);
+        dispatch.invoke(msg);
     }
 }
 
-fn receive<S, E>(
-    receiver: Rc<RefCell<WebReceiver<E>>>,
-    from_event: impl Fn(&UseStoreHandle<S>, &E) -> Option<S::Action> + 'static,
-    store: UseStoreHandle<S>,
-) where
-    S: Reducible + Clone + Debug + 'static,
-    S::Action: Debug,
-    E: DeserializeOwned + Debug + 'static,
-{
-    let store_ref = use_mut_ref(|| None);
-
-    *store_ref.borrow_mut() = Some(store);
-
-    use_effect_with_deps(
-        move |_| {
-            spawn_local(async move {
-                receive_async(&mut receiver.borrow_mut(), from_event, store_ref)
-                    .await
-                    .unwrap();
-            });
-
-            || ()
-        },
-        1, // Will only ever be called once
-    );
-}
-
-async fn receive_async<S, E>(
-    receiver: &mut WebReceiver<E>,
-    from_event: impl Fn(&UseStoreHandle<S>, &E) -> Option<S::Action>,
-    store_ref: Rc<RefCell<Option<UseStoreHandle<S>>>>,
-) -> anyhow::Result<()>
+pub fn log_store<S, M, D>(level: Level) -> impl Fn(M, D)
 where
-    S: Reducible + Clone + Debug + 'static,
-    S::Action: Debug,
-    E: DeserializeOwned + Debug + 'static,
+    S: Store + Debug,
+    M: Reducer<S> + Debug,
+    D: Dispatch<M>,
 {
-    loop {
-        let event = receiver.recv().await?;
+    move |msg, dispatch| {
+        log!(level, "Store (before): {:?}", yewdux::dispatch::get::<S>());
 
-        info!("Received event: {:?}", event);
+        dispatch.invoke(msg);
 
-        let store = store_ref.borrow().as_ref().unwrap().clone();
-        if let Some(action) = from_event(&store, &event) {
-            store.dispatch(action);
-        }
+        log!(level, "Store (after): {:?}", yewdux::dispatch::get::<S>());
     }
 }
 
 #[cfg(feature = "middleware-local")]
 mod local {
     use core::cell::RefCell;
+    use core::fmt::Debug;
 
     extern crate alloc;
     use alloc::rc::Rc;
 
-    use yew::use_ref;
+    use log::trace;
+
+    use wasm_bindgen_futures::spawn_local;
 
     use embassy_sync::channel;
 
-    pub fn channel<R, E>(
-        init_fn: impl Fn() -> (
-            channel::DynamicSender<'static, R>,
-            channel::DynamicReceiver<'static, E>,
-        ),
-    ) -> (Rc<RefCell<WebSender<R>>>, Rc<RefCell<WebReceiver<E>>>)
-    where
-        R: 'static,
-        E: 'static,
-    {
-        let ws = use_ref(move || {
-            let (sender, receiver) = init_fn();
+    use yewdux_middleware::*;
 
-            (
-                Rc::new(RefCell::new(WebSender(sender))),
-                Rc::new(RefCell::new(WebReceiver(receiver))),
-            )
+    pub fn send<M>(sender: impl Into<channel::DynamicSender<'static, M>>) -> impl Fn(M)
+    where
+        M: Debug + 'static,
+    {
+        let sender = Rc::new(RefCell::new(sender.into()));
+
+        move |msg| {
+            let sender = sender.clone();
+
+            spawn_local(async move {
+                trace!("Sending request: {:?}", msg);
+
+                sender.borrow_mut().send(msg).await;
+            });
+        }
+    }
+
+    pub fn receive<M>(receiver: impl Into<channel::DynamicReceiver<'static, M>>)
+    where
+        M: Debug + 'static,
+    {
+        let receiver = receiver.into();
+
+        spawn_local(async move {
+            loop {
+                let event = receiver.recv().await;
+                trace!("Received event: {:?}", event);
+
+                dispatch::invoke(event);
+            }
         });
-
-        (ws.0.clone(), ws.1.clone())
-    }
-
-    pub struct WebSender<R>(channel::DynamicSender<'static, R>)
-    where
-        R: 'static;
-
-    impl<R> WebSender<R>
-    where
-        R: 'static,
-    {
-        pub async fn send(&mut self, request: R) -> anyhow::Result<()> {
-            self.0.send(request).await;
-
-            Ok(())
-        }
-    }
-
-    pub struct WebReceiver<E>(channel::DynamicReceiver<'static, E>)
-    where
-        E: 'static;
-
-    impl<E> WebReceiver<E>
-    where
-        E: 'static,
-    {
-        pub async fn recv(&mut self) -> anyhow::Result<E> {
-            let event = self.0.recv().await;
-
-            Ok(event)
-        }
     }
 }
 
 #[cfg(feature = "middleware-ws")]
 mod ws {
     use core::cell::RefCell;
-    use core::marker::PhantomData;
+    use core::fmt::Debug;
 
     extern crate alloc;
     use alloc::rc::Rc;
 
     use serde::{de::DeserializeOwned, Serialize};
 
+    use log::trace;
+
     use futures::stream::{SplitSink, SplitStream};
     use futures::{SinkExt, StreamExt};
 
     use gloo_net::websocket::{futures::WebSocket, Message};
 
-    use postcard::*;
+    use postcard::to_allocvec;
 
-    use yew::use_ref;
+    use wasm_bindgen::JsError;
+    use wasm_bindgen_futures::spawn_local;
 
-    pub fn channel<R, E>(
-        ws_endpoint: &'static str,
-    ) -> (Rc<RefCell<WebSender<R>>>, Rc<RefCell<WebReceiver<E>>>)
-    where
-        R: 'static,
-        E: 'static,
-    {
-        let ws = use_ref(move || {
-            let (sender, receiver) = open(&format!(
-                "ws://{}/{}",
-                web_sys::window().unwrap().location().host().unwrap(),
-                ws_endpoint,
-            ))
-            .unwrap();
+    use yewdux_middleware::dispatch;
 
-            (
-                Rc::new(RefCell::new(sender)),
-                Rc::new(RefCell::new(receiver)),
-            )
-        });
-
-        (ws.0.clone(), ws.1.clone())
-    }
-
-    fn open<R, E>(url: &str) -> anyhow::Result<(WebSender<R>, WebReceiver<E>)> {
-        let ws = WebSocket::open(url).map_err(|e| anyhow::anyhow!("{}", e))?;
-
-        let (write, read) = ws.split();
-
-        Ok((
-            WebSender(write, PhantomData),
-            WebReceiver(read, PhantomData),
+    pub fn open(
+        ws_endpoint: &str,
+    ) -> Result<(SplitSink<WebSocket, Message>, SplitStream<WebSocket>), JsError> {
+        open_url(&format!(
+            "ws://{}/{}",
+            web_sys::window().unwrap().location().host().unwrap(),
+            ws_endpoint,
         ))
     }
 
-    pub struct WebSender<R>(SplitSink<WebSocket, Message>, PhantomData<fn() -> R>);
+    fn open_url(
+        url: &str,
+    ) -> Result<(SplitSink<WebSocket, Message>, SplitStream<WebSocket>), JsError> {
+        let ws = WebSocket::open(url)?;
 
-    impl<R> WebSender<R>
+        Ok(ws.split())
+    }
+
+    pub fn send<M>(sender: SplitSink<WebSocket, Message>) -> impl Fn(M)
     where
-        R: Serialize,
+        M: Serialize + Debug + 'static,
     {
-        pub async fn send(&mut self, request: R) -> anyhow::Result<()> {
-            self.0
-                .send(Message::Bytes(to_allocvec(&request)?))
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let sender = Rc::new(RefCell::new(sender));
 
-            Ok(())
+        move |msg| {
+            let sender = sender.clone();
+
+            spawn_local(async move {
+                trace!("Sending request: {:?}", msg);
+
+                sender
+                    .borrow_mut()
+                    .send(Message::Bytes(to_allocvec(&msg).unwrap()))
+                    .await
+                    .unwrap();
+            });
         }
     }
 
-    pub struct WebReceiver<E>(SplitStream<WebSocket>, PhantomData<fn() -> E>);
-
-    impl<E> WebReceiver<E>
+    pub fn receive<M>(mut receiver: SplitStream<WebSocket>)
     where
-        E: DeserializeOwned,
+        M: DeserializeOwned + Debug + 'static,
     {
-        pub async fn recv(&mut self) -> anyhow::Result<E> {
-            let message = self
-                .0
-                .next()
-                .await
-                .unwrap()
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+        spawn_local(async move {
+            loop {
+                let event = receiver.next().await.unwrap().unwrap();
+                trace!("Received event: {:?}", event);
 
-            let event = match message {
-                Message::Bytes(data) => from_bytes(&data)?,
-                _ => anyhow::bail!("Invalid message format"),
-            };
-
-            Ok(event)
-        }
+                dispatch::invoke(event);
+            }
+        });
     }
 }

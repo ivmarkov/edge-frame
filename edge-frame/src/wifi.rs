@@ -1,10 +1,12 @@
 use std::net::Ipv4Addr;
+use std::rc::Rc;
 use std::str::FromStr;
 
 use strum::*;
 
 use yew::prelude::*;
 use yew_router::Routable;
+use yewdux_middleware::*;
 
 use embedded_svc::ipv4::{self, DHCPClientSettings, RouterConfiguration, Subnet};
 use embedded_svc::wifi::{
@@ -13,23 +15,35 @@ use embedded_svc::wifi::{
 
 use crate::field::*;
 use crate::frame::{RouteNavItem, RouteStatusItem};
-use crate::redust::{use_projection, Projection, Reducible2, ValueAction, ValueState};
 use crate::util::*;
 
+#[derive(Default, Clone, Debug, Eq, PartialEq, Store)]
+pub struct WifiConfStore(pub Option<WifiConfState>);
+
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WifiConf {
-    configuration: Configuration,
-    ap_ip_conf: Option<ipv4::RouterConfiguration>,
-    sta_ip_conf: Option<ipv4::ClientConfiguration>,
+pub struct WifiConfState {
+    pub configuration: Configuration,
+    pub ap_ip_conf: Option<ipv4::RouterConfiguration>,
+    pub sta_ip_conf: Option<ipv4::ClientConfiguration>,
 }
 
-impl Default for WifiConf {
+impl Default for WifiConfState {
     fn default() -> Self {
         Self {
             configuration: Configuration::Mixed(Default::default(), Default::default()),
             ap_ip_conf: Some(Default::default()),
             sta_ip_conf: Some(Default::default()),
         }
+    }
+}
+
+impl Reducer<WifiConfStore> for WifiConfState {
+    fn apply(&self, mut store: Rc<WifiConfStore>) -> Rc<WifiConfStore> {
+        let state = Rc::make_mut(&mut store);
+
+        state.0 = Some(self.clone());
+
+        store
     }
 }
 
@@ -65,14 +79,13 @@ pub fn wifi_nav_item<R: Routable + PartialEq + Clone + 'static>(
 }
 
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct WifiStatusItemProps<R: Routable + PartialEq + Clone + 'static, S: Reducible2> {
+pub struct WifiStatusItemProps<R: Routable + PartialEq + Clone + 'static> {
     pub route: R,
-    pub projection: Projection<S, WifiState, WifiAction>,
 }
 
 #[function_component(WifiStatusItem)]
-pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Reducible2>(
-    props: &WifiStatusItemProps<R, S>,
+pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static>(
+    props: &WifiStatusItemProps<R>,
 ) -> Html {
     html! {
         <RouteStatusItem<R>
@@ -81,21 +94,16 @@ pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static, S: Reducible2
     }
 }
 
-pub type WifiAction = ValueAction<Option<WifiConf>>;
-pub type WifiState = ValueState<Option<WifiConf>>;
-
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct WifiProps<R: Reducible2> {
+pub struct WifiProps {
     #[prop_or_default]
-    pub edit_scope: EditScope,
-
-    pub projection: Projection<R, WifiState, WifiAction>,
+    pub edit_scope: EditScope, // TODO
 }
 
 #[function_component(Wifi)]
-pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
-    let conf_store = use_projection(props.projection.clone());
-    let conf = (**conf_store).as_ref();
+pub fn wifi(_props: &WifiProps) -> Html {
+    let conf_store = use_store::<WifiConfStore>();
+    let conf = conf_store.0.as_ref();
 
     let mut ap_conf_form = ApConfForm::new();
     let mut sta_conf_form = StaConfForm::new();
@@ -112,21 +120,19 @@ pub fn wifi<R: Reducible2>(props: &WifiProps<R>) -> Html {
     }));
 
     let onclick = {
-        let conf_store = conf_store.clone();
-
         let sta_conf_form = sta_conf_form.clone();
         let ap_conf_form = ap_conf_form.clone();
 
         Callback::from(move |_| {
             if let Some((sta_conf, sta_ip_conf)) = sta_conf_form.get() {
                 if let Some((ap_conf, ap_ip_conf)) = ap_conf_form.get() {
-                    let new_conf = WifiConf {
+                    let new_conf = WifiConfState {
                         configuration: Configuration::Mixed(sta_conf, ap_conf),
                         sta_ip_conf,
                         ap_ip_conf,
                     };
 
-                    conf_store.dispatch(ValueAction::Update(Some(new_conf)));
+                    dispatch::invoke(new_conf);
                 }
             }
         })

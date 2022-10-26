@@ -1,22 +1,26 @@
+use std::rc::Rc;
+
 use yew::prelude::*;
 use yew_router::prelude::*;
+use yewdux_middleware::*;
 
 use crate::auth::*;
 use crate::frame::*;
 use crate::loading::*;
-use crate::redust::{use_projection, Projection, Reducible2, ValueAction, ValueState};
 
 pub use crate::dto::Role as RoleDto;
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Store)]
+pub struct RoleStore(pub Option<RoleState>);
+
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct Credentials {
     pub username: String,
     pub password: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RoleStateValue {
-    Unknown,
+pub enum RoleState {
     Authenticating(Credentials),
     AuthenticationFailed(Credentials),
     Role(RoleDto),
@@ -24,19 +28,19 @@ pub enum RoleStateValue {
     LoggedOut,
 }
 
-impl Default for RoleStateValue {
-    fn default() -> Self {
-        Self::Unknown
+impl Reducer<RoleStore> for RoleState {
+    fn apply(&self, mut store: Rc<RoleStore>) -> Rc<RoleStore> {
+        let state = Rc::make_mut(&mut store);
+
+        state.0 = Some(self.clone());
+
+        store
     }
 }
 
-pub type RoleAction = ValueAction<RoleStateValue>;
-pub type RoleState = ValueState<RoleStateValue>;
-
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct RoleProps<R: Reducible2> {
+pub struct RoleProps {
     pub role: RoleDto,
-    pub projection: Projection<R, RoleState, RoleAction>,
 
     #[prop_or_default]
     pub auth: bool,
@@ -46,35 +50,35 @@ pub struct RoleProps<R: Reducible2> {
 }
 
 #[function_component(Role)]
-pub fn role<R: Reducible2>(props: &RoleProps<R>) -> Html {
-    let role = use_projection(props.projection.clone());
+pub fn role(props: &RoleProps) -> Html {
+    let role = use_store::<RoleStore>();
+    let role = role.0.as_ref();
 
-    match (&**role, &Default::default()) {
-        (RoleStateValue::Role(role), _) if *role >= props.role => {
+    match (&role, &Default::default()) {
+        (Some(RoleState::Role(role)), _) if *role >= props.role => {
             // Have permissions to render the content
             html! {
                 { for props.children.iter() }
             }
         }
-        (RoleStateValue::Unknown, _) if props.auth => {
+        (None, _) if props.auth => {
             // Unknown permissions => render modal loader if auth=true
             html! {
                 <Loading/>
             }
         }
-        (RoleStateValue::AuthenticationFailed(credentials), _)
-        | (RoleStateValue::Authenticating(credentials), _)
-        | (RoleStateValue::Role(RoleDto::None), credentials)
+        (Some(RoleState::AuthenticationFailed(credentials)), _)
+        | (Some(RoleState::Authenticating(credentials)), _)
+        | (Some(RoleState::Role(RoleDto::None)), credentials)
             if props.auth =>
         {
             // Not authenticated yet or previous authentication attempt failed => render login dialog if auth=true
             let submit = {
-                let role = role.clone();
-
                 Callback::from(move |(username, password)| {
-                    role.dispatch(RoleAction::Update(RoleStateValue::Authenticating(
-                        Credentials { username, password },
-                    )));
+                    dispatch::invoke(RoleState::Authenticating(Credentials {
+                        username,
+                        password,
+                    }));
                 })
             };
 
@@ -82,8 +86,8 @@ pub fn role<R: Reducible2>(props: &RoleProps<R>) -> Html {
                 <Auth
                     username={credentials.username.clone()}
                     password={credentials.password.clone()}
-                    authenticating={matches!(&**role, RoleStateValue::Authenticating(_))}
-                    auth_failed={matches!(&**role, RoleStateValue::AuthenticationFailed(_))}
+                    authenticating={matches!(role, Some(RoleState::Authenticating(_)))}
+                    auth_failed={matches!(role, Some(RoleState::AuthenticationFailed(_)))}
                     {submit}
                 />
             }
@@ -103,27 +107,27 @@ pub fn role<R: Reducible2>(props: &RoleProps<R>) -> Html {
 }
 
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct RoleLogoutStatusItemProps<R: Routable + PartialEq + Clone + 'static, S: Reducible2> {
+pub struct RoleLogoutStatusItemProps<R: Routable + PartialEq + Clone + 'static> {
     pub auth_status_route: R,
-    pub projection: Projection<S, RoleState, RoleAction>,
 }
 
 #[function_component(RoleLogoutStatusItem)]
-pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static, S: Reducible2>(
-    props: &RoleLogoutStatusItemProps<R, S>,
+pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static>(
+    props: &RoleLogoutStatusItemProps<R>,
 ) -> Html {
-    let role = use_projection(props.projection.clone());
+    let role = use_store::<RoleStore>();
+    let role = role.0.as_ref();
+
     let history = use_history();
 
-    match &**role {
-        RoleStateValue::Role(role_value) if *role_value >= crate::dto::Role::None => {
+    match &role {
+        Some(RoleState::Role(role_value)) if *role_value >= crate::dto::Role::None => {
             let selected = {
                 let auth_status_route = props.auth_status_route.clone();
                 let role_value = *role_value;
-                let role = role.clone();
 
                 Callback::from(move |_| {
-                    role.dispatch(RoleAction::Update(RoleStateValue::LoggingOut(role_value)));
+                    dispatch::invoke(RoleState::LoggingOut(role_value));
 
                     if let Some(history) = history.as_ref() {
                         history.push(auth_status_route.clone());
@@ -144,20 +148,20 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static, S: Red
 }
 
 #[derive(Properties, Clone, Debug, PartialEq)]
-pub struct RoleAuthStateProps<R: Routable + PartialEq + Clone + 'static, S: Reducible2> {
+pub struct RoleAuthStateProps<R: Routable + PartialEq + Clone + 'static> {
     #[prop_or_default]
     pub home: Option<R>,
-    pub projection: Projection<S, RoleState, RoleAction>,
 }
 
 #[function_component(RoleAuthState)]
-pub fn role_auth_state<R: Routable + PartialEq + Clone + 'static, S: Reducible2>(
-    props: &RoleAuthStateProps<R, S>,
+pub fn role_auth_state<R: Routable + PartialEq + Clone + 'static>(
+    props: &RoleAuthStateProps<R>,
 ) -> Html {
-    let role = use_projection(props.projection.clone());
+    let role = use_store::<RoleStore>();
+    let role = role.0.as_ref();
 
-    let role = match &**role {
-        RoleStateValue::Role(role_value) => Some(*role_value),
+    let role = match &role {
+        Some(RoleState::Role(role_value)) => Some(*role_value),
         _ => None,
     };
 
