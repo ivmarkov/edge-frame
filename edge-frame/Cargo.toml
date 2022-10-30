@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 [features]
 default = ["web"]
 web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "yewdux", "yewdux-middleware", "dto", "embedded-svc/std"]
-middleware-ws = ["web", "wasm-bindgen", "wasm-bindgen-futures", "anyhow", "futures", "postcard", "gloo-net"]
+middleware-ws = ["web", "wasm-bindgen", "wasm-bindgen-futures", "anyhow", "futures", "postcard", "gloo-net", "embassy-sync"]
 middleware-local = ["web", "wasm-bindgen-futures", "anyhow", "embassy-sync"]
 nightly = ["embedded-svc?/nightly"]
 dto = ["serde", "enumset", "strum", "strum_macros", "num_enum"]

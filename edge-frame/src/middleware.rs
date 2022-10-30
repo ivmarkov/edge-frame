@@ -43,13 +43,13 @@ mod local {
     use core::fmt::Debug;
 
     extern crate alloc;
-    use alloc::rc::Rc;
+    use alloc::sync::Arc;
 
     use log::trace;
 
     use wasm_bindgen_futures::spawn_local;
 
-    use embassy_sync::channel;
+    use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel, mutex::Mutex};
 
     use yewdux_middleware::*;
 
@@ -57,7 +57,7 @@ mod local {
     where
         M: Debug + 'static,
     {
-        let sender = Rc::new(RefCell::new(sender.into()));
+        let sender = Arc::new(Mutex::<CriticalSectionRawMutex, _>::new(sender.into()));
 
         move |msg| {
             let sender = sender.clone();
@@ -65,7 +65,9 @@ mod local {
             spawn_local(async move {
                 trace!("Sending request: {:?}", msg);
 
-                sender.borrow_mut().send(msg).await;
+                let guard = sender.lock().await;
+
+                guard.send(msg).await;
             });
         }
     }
@@ -93,7 +95,7 @@ mod ws {
     use core::fmt::Debug;
 
     extern crate alloc;
-    use alloc::rc::Rc;
+    use alloc::sync::Arc;
 
     use serde::{de::DeserializeOwned, Serialize};
 
@@ -110,6 +112,8 @@ mod ws {
     use wasm_bindgen_futures::spawn_local;
 
     use yewdux_middleware::dispatch;
+
+    use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
 
     pub fn open(
         ws_endpoint: &str,
@@ -133,7 +137,7 @@ mod ws {
     where
         M: Serialize + Debug + 'static,
     {
-        let sender = Rc::new(RefCell::new(sender));
+        let sender = Arc::new(Mutex::<CriticalSectionRawMutex, _>::new(sender));
 
         move |msg| {
             let sender = sender.clone();
@@ -141,8 +145,9 @@ mod ws {
             spawn_local(async move {
                 trace!("Sending request: {:?}", msg);
 
-                sender
-                    .borrow_mut()
+                let guard = sender.lock().await;
+
+                guard
                     .send(Message::Bytes(to_allocvec(&msg).unwrap()))
                     .await
                     .unwrap();
