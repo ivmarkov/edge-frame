@@ -94,7 +94,7 @@ fn init_middleware() {
 }
 
 // Set the middleware for each store type (PinsState & DisplaysState)
-fn store_dispatch<S, M>() -> impl Dispatch<M> + Clone
+fn store_dispatch<S, M>() -> impl MiddlewareDispatch<M> + Clone
 where
     S: Store + Debug,
     M: Reducer<S> + Debug + 'static,
