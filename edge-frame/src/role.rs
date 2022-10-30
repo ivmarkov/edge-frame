@@ -51,7 +51,7 @@ pub struct RoleProps {
 
 #[function_component(Role)]
 pub fn role(props: &RoleProps) -> Html {
-    let role = use_store::<RoleStore>();
+    let role = use_store_value::<RoleStore>();
     let role = role.0.as_ref();
 
     match (&role, &Default::default()) {
@@ -115,7 +115,7 @@ pub struct RoleLogoutStatusItemProps<R: Routable + PartialEq + Clone + 'static> 
 pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static>(
     props: &RoleLogoutStatusItemProps<R>,
 ) -> Html {
-    let role = use_store::<RoleStore>();
+    let role = use_store_value::<RoleStore>();
     let role = role.0.as_ref();
 
     let history = use_history();
@@ -157,7 +157,7 @@ pub struct RoleAuthStateProps<R: Routable + PartialEq + Clone + 'static> {
 pub fn role_auth_state<R: Routable + PartialEq + Clone + 'static>(
     props: &RoleAuthStateProps<R>,
 ) -> Html {
-    let role = use_store::<RoleStore>();
+    let role = use_store_value::<RoleStore>();
     let role = role.0.as_ref();
 
     let role = match &role {

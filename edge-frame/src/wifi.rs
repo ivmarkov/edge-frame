@@ -102,7 +102,7 @@ pub struct WifiProps {
 
 #[function_component(Wifi)]
 pub fn wifi(_props: &WifiProps) -> Html {
-    let conf_store = use_store::<WifiConfStore>();
+    let conf_store = use_store_value::<WifiConfStore>();
     let conf = conf_store.0.as_ref();
 
     let mut ap_conf_form = ApConfForm::new();
