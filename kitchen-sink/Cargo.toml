@@ -20,7 +20,7 @@ derive_more = "0.99"
 wasm-logger = "0.2"
 yew = { version = "0.19", default-features = false }
 yew-router = "0.16"
-yewdux-middleware = { version = "0.1", git = "https://github.com/ivmarkov/yewdux-middleware" }
+yewdux-middleware = "0.1"
 edge-frame = { path = "../edge-frame" }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
