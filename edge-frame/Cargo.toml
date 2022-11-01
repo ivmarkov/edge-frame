@@ -29,8 +29,8 @@ wasm-logger = { version = "0.2", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
 yew = { version = "0.19", optional = true, default-features = false }
 yew-router = { version = "0.16", optional = true }
-yewdux = { version = "0.8", optional = true }
-yewdux-middleware = { version = "0.1", optional = true, git = "https://github.com/ivmarkov/yewdux-middleware" }
+yewdux = { version = "0.8.3", default-features = false, optional = true }
+yewdux-middleware = { version = "0.1", optional = true }
 serde = { version = "1", default-features = false, optional = true, features = ["derive"] }
 enumset = { version = "1", default-features = false, optional = true, features = ["serde"] }
 strum = { version = "0.23", default-features = false, optional = true, features = ["derive"] }
