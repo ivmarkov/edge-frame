@@ -9,7 +9,7 @@ on:
     - cron: '50 4 * * *'
 
 env:
-  rust_toolchain: nightly
+  rust_toolchain: stable
 
 jobs:
   compile:
@@ -23,7 +23,7 @@ jobs:
         with:
           toolchain: ${{ env.rust_toolchain }}
           components: rustfmt, clippy
-      - name: Setup | Default to nightly
+      - name: Setup | Set toolchain
         run: rustup default ${{ env.rust_toolchain }}
       - name: Build | Fmt Check
         run: cargo fmt -- --check

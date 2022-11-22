@@ -4,7 +4,7 @@ on:
   workflow_dispatch
 
 env:
-  rust_toolchain: nightly
+  rust_toolchain: stable
 
 jobs:
   publishdryrun:
@@ -17,7 +17,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.rust_toolchain }}
-      - name: Setup | Default to nightly
+      - name: Setup | Set toolchain
         run: rustup default ${{ env.rust_toolchain }}
       - name: Add wasm target
         run: rustup target add wasm32-unknown-unknown
