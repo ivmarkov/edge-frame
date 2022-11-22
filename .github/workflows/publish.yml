@@ -5,6 +5,7 @@ on:
 
 env:
   rust_toolchain: stable
+  CRATE_NAME: edge-frame
 
 jobs:
   publish:
