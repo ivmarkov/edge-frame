@@ -2,7 +2,7 @@
 
 [package]
 name = "kitchen-sink"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Ivan Markov <ivan.markov@gmail.com>"]
 edition = "2018"
 resolver = "2"
