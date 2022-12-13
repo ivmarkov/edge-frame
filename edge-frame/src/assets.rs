@@ -117,10 +117,8 @@ pub mod serve {
         impl<C: Connection> Handler<C> for AssetHandler {
             type HandleFuture<'a> = impl Future<Output = HandlerResult> where Self: 'a, C: 'a;
 
-            fn handle<'a>(&'a self, connection: C) -> Self::HandleFuture<'a> {
-                async move {
-                    serve_asset_data(Request::wrap(connection)?, self.0.clone(), &self.1).await
-                }
+            fn handle<'a>(&'a self, connection: &'a mut C) -> Self::HandleFuture<'a> {
+                async move { serve_asset_data(Request::wrap(connection), self.0.clone(), &self.1).await }
             }
         }
 

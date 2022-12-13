@@ -5,10 +5,6 @@
 )]
 #![cfg_attr(
     all(feature = "nightly", feature = "assets-serve"),
-    feature(generic_associated_types)
-)]
-#![cfg_attr(
-    all(feature = "nightly", feature = "assets-serve"),
     feature(type_alias_impl_trait)
 )]
 #![cfg_attr(feature = "web", recursion_limit = "1024")]
