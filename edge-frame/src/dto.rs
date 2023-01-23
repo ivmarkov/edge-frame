@@ -12,6 +12,7 @@ mod role {
     #[derive(
         EnumSetType,
         Debug,
+        Default,
         PartialOrd,
         Serialize,
         Deserialize,
@@ -23,6 +24,7 @@ mod role {
     )]
     #[repr(u8)]
     pub enum Role {
+        #[default]
         #[strum(serialize = "none", message = "None")]
         None,
 
