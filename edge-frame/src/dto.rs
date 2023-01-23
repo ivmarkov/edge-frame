@@ -34,10 +34,4 @@ mod role {
         #[strum(serialize = "admin", message = "Admin")]
         Admin,
     }
-
-    impl Default for Role {
-        fn default() -> Self {
-            Role::None
-        }
-    }
 }
