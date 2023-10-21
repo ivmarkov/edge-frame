@@ -1,9 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use web_sys::Event;
-use yew::{use_state, UseStateHandle};
+use yew::{Callback, UseStateHandle};
 
-use super::callback2::Callback2;
 use super::util::*;
 
 #[derive(Clone)]
@@ -11,8 +10,8 @@ pub struct Field<R, S> {
     model_raw_value: Option<R>,
     raw_value: Rc<RefCell<Option<R>>>,
     value_state: UseStateHandle<Option<R>>,
-    converter: Callback2<Event, R>,
-    validator: Callback2<R, Result<S, String>>,
+    converter: Callback<Event, R>,
+    validator: Callback<R, Result<S, String>>,
 }
 
 pub type TextField<S> = Field<String, S>;
@@ -22,8 +21,17 @@ impl<S> Field<String, S>
 where
     S: Clone,
 {
-    pub fn text(validate: impl Fn(String) -> Result<S, String> + 'static) -> Self {
-        Self::new(get_input_text, validate)
+    pub fn text(
+        model_raw_value: String,
+        value_state: UseStateHandle<Option<String>>,
+        validator: impl Fn(String) -> Result<S, String> + 'static,
+    ) -> Rc<Self> {
+        Rc::new(Self::new(
+            Some(model_raw_value),
+            value_state,
+            get_input_text,
+            validator,
+        ))
     }
 }
 
@@ -31,8 +39,17 @@ impl<S> Field<bool, S>
 where
     S: Clone,
 {
-    pub fn checked(validate: impl Fn(bool) -> Result<S, String> + 'static) -> Self {
-        Self::new(get_input_checked, validate)
+    pub fn checked(
+        model_raw_value: bool,
+        value_state: UseStateHandle<Option<bool>>,
+        validator: impl Fn(bool) -> Result<S, String> + 'static,
+    ) -> Rc<Self> {
+        Rc::new(Self::new(
+            Some(model_raw_value),
+            value_state,
+            get_input_checked,
+            validator,
+        ))
     }
 }
 
@@ -42,15 +59,17 @@ where
     S: Clone,
 {
     pub fn new(
+        model_raw_value: Option<R>,
+        value_state: UseStateHandle<Option<R>>,
         converter: impl Fn(Event) -> R + 'static,
-        validate: impl Fn(R) -> Result<S, String> + 'static,
+        validator: impl Fn(R) -> Result<S, String> + 'static,
     ) -> Self {
         Self {
-            model_raw_value: None,
-            value_state: use_state(|| None),
+            model_raw_value,
+            value_state,
             raw_value: Rc::new(RefCell::new(None)),
-            converter: Callback2::from(converter),
-            validator: Callback2::from(validate),
+            converter: Callback::from(converter),
+            validator: Callback::from(validator),
         }
     }
 
@@ -60,12 +79,8 @@ where
             || self.value_state.is_some() && *self.value_state != self.model_raw_value
     }
 
-    pub fn update(&mut self, raw_value: R) {
-        self.model_raw_value = Some(raw_value);
-    }
-
     pub fn value(&self) -> Option<S> {
-        self.validator.call(self.raw_value()).ok()
+        self.validator.emit(self.raw_value()).ok()
     }
 
     pub fn raw_value(&self) -> R {
@@ -83,7 +98,7 @@ where
     }
 
     pub fn error(&self) -> Option<String> {
-        match self.validator.call(self.raw_value()) {
+        match self.validator.emit(self.raw_value()) {
             Ok(_) => None,
             Err(error) => Some(error),
         }
@@ -93,17 +108,20 @@ where
         self.error().unwrap_or_else(|| "\u{00a0}".into())
     }
 
-    pub fn change<V>(&self) -> impl Fn(V)
+    pub fn change<V>(&self, callback: Callback<()>) -> impl Fn(V)
     where
         V: Into<Event>,
     {
         let this = (*self).clone();
 
-        move |event| this.on_change(event.into())
+        move |event| {
+            this.on_change(event.into());
+            callback.emit(());
+        }
     }
 
     pub fn on_change(&self, event: Event) {
-        let value = self.converter.call(event);
+        let value = self.converter.emit(event);
 
         *self.raw_value.borrow_mut() = Some(value.clone());
         self.value_state.set(Some(value));

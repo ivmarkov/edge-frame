@@ -131,7 +131,7 @@ where
     R: Routable + Clone + 'static,
 {
     let route = use_route::<R>();
-    let history = use_history();
+    let history = use_navigator();
 
     let selected = {
         let route = props.route.clone();
@@ -140,7 +140,7 @@ where
             let history = history.clone();
 
             if let Some(history) = history {
-                history.push(route.clone())
+                history.push(&route)
             }
         })
     };
@@ -206,14 +206,14 @@ pub fn route_status_item<R>(props: &RouteStatusItemProps<R>) -> Html
 where
     R: Routable + Clone + 'static,
 {
-    let history = use_history();
+    let history = use_navigator();
 
     let selected = {
         let route = props.route.clone();
 
         Callback::from(move |_| {
             if let Some(history) = history.as_ref() {
-                history.push(route.clone());
+                history.push(&route);
             }
         })
     };

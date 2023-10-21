@@ -27,23 +27,20 @@ enum Routes {
 
 #[function_component(App)]
 fn app() -> Html {
-    use_effect_with_deps(
-        move |_| {
-            init_middleware();
+    use_effect_with((), move |_| {
+        init_middleware();
 
-            move || ()
-        },
-        (),
-    );
+        move || ()
+    });
 
     html! {
         <BrowserRouter>
-            <Switch<Routes> render={Switch::render(render)}/>
+            <Switch<Routes> render={render}/>
         </BrowserRouter>
     }
 }
 
-fn render(route: &Routes) -> Html {
+fn render(route: Routes) -> Html {
     html! {
         <Frame
             app_title="EDGE FRAME"
@@ -110,5 +107,5 @@ where
 fn main() {
     wasm_logger::init(wasm_logger::Config::default());
 
-    yew::start_app::<App>();
+    yew::Renderer::<App>::new().render();
 }

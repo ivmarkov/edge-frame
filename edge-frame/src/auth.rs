@@ -25,11 +25,11 @@ pub struct AuthProps {
 
 #[function_component(Auth)]
 pub fn auth(props: &AuthProps) -> Html {
-    let mut username = Field::text(Ok);
-    let mut password = Field::text(Ok);
+    let username_state = use_state(|| None);
+    let password_state = use_state(|| None);
 
-    username.update(props.username.clone());
-    password.update(props.password.clone());
+    let username = Field::text(props.username.clone(), username_state, Ok);
+    let password = Field::text(props.password.clone(), password_state, Ok);
 
     let disabled = props.authenticating;
     let hidden = if_true(
@@ -62,7 +62,7 @@ pub fn auth(props: &AuthProps) -> Html {
                                 class="input"
                                 type="text"
                                 value={username.raw_value()}
-                                oninput={username.change()}
+                                oninput={username.change((|()| {}).into())}
                                 {disabled}
                                 />
                         </div>
@@ -74,7 +74,7 @@ pub fn auth(props: &AuthProps) -> Html {
                                 class="input"
                                 type="password"
                                 value={password.raw_value()}
-                                oninput={password.change()}
+                                oninput={password.change((|()| {}).into())}
                                 {disabled}
                                 />
                         </div>

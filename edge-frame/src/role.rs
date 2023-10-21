@@ -29,10 +29,10 @@ pub enum RoleState {
 }
 
 impl Reducer<RoleStore> for RoleState {
-    fn apply(&self, mut store: Rc<RoleStore>) -> Rc<RoleStore> {
+    fn apply(self, mut store: Rc<RoleStore>) -> Rc<RoleStore> {
         let state = Rc::make_mut(&mut store);
 
-        state.0 = Some(self.clone());
+        state.0 = Some(self);
 
         store
     }
@@ -118,7 +118,7 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static>(
     let role = use_store_value::<RoleStore>();
     let role = role.0.as_ref();
 
-    let history = use_history();
+    let history = use_navigator();
 
     match &role {
         Some(RoleState::Role(role_value)) if *role_value >= crate::dto::Role::None => {
@@ -130,7 +130,7 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static>(
                     dispatch::invoke(RoleState::LoggingOut(role_value));
 
                     if let Some(history) = history.as_ref() {
-                        history.push(auth_status_route.clone());
+                        history.push(&auth_status_route);
                     }
                 })
             };
@@ -157,6 +157,8 @@ pub struct RoleAuthStateProps<R: Routable + PartialEq + Clone + 'static> {
 pub fn role_auth_state<R: Routable + PartialEq + Clone + 'static>(
     props: &RoleAuthStateProps<R>,
 ) -> Html {
+    let history = use_navigator();
+
     let role = use_store_value::<RoleStore>();
     let role = role.0.as_ref();
 
@@ -165,12 +167,12 @@ pub fn role_auth_state<R: Routable + PartialEq + Clone + 'static>(
         _ => None,
     };
 
-    let login = if let Some(home) = props.home.clone() {
-        let history = use_history();
+    let login = if let Some(home) = props.home.as_ref() {
+        let home = home.clone();
 
         Some(Callback::from(move |_| {
             if let Some(history) = history.as_ref() {
-                history.push(home.clone());
+                history.push(&home);
             }
         }))
     } else {
