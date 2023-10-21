@@ -7,7 +7,7 @@ use super::util::*;
 
 #[derive(Clone)]
 pub struct Field<R, S> {
-    model_raw_value: Option<R>,
+    initial_value: Option<R>,
     raw_value: Rc<RefCell<Option<R>>>,
     value_state: UseStateHandle<Option<R>>,
     converter: Callback<Event, R>,
@@ -22,12 +22,12 @@ where
     S: Clone,
 {
     pub fn text(
-        model_raw_value: String,
+        initial_value: String,
         value_state: UseStateHandle<Option<String>>,
         validator: impl Fn(String) -> Result<S, String> + 'static,
     ) -> Rc<Self> {
         Rc::new(Self::new(
-            Some(model_raw_value),
+            Some(initial_value),
             value_state,
             get_input_text,
             validator,
@@ -40,12 +40,12 @@ where
     S: Clone,
 {
     pub fn checked(
-        model_raw_value: bool,
+        initial_value: bool,
         value_state: UseStateHandle<Option<bool>>,
         validator: impl Fn(bool) -> Result<S, String> + 'static,
     ) -> Rc<Self> {
         Rc::new(Self::new(
-            Some(model_raw_value),
+            Some(initial_value),
             value_state,
             get_input_checked,
             validator,
@@ -59,13 +59,13 @@ where
     S: Clone,
 {
     pub fn new(
-        model_raw_value: Option<R>,
+        initial_value: Option<R>,
         value_state: UseStateHandle<Option<R>>,
         converter: impl Fn(Event) -> R + 'static,
         validator: impl Fn(R) -> Result<S, String> + 'static,
     ) -> Self {
         Self {
-            model_raw_value,
+            initial_value,
             value_state,
             raw_value: Rc::new(RefCell::new(None)),
             converter: Callback::from(converter),
@@ -76,7 +76,7 @@ where
     pub fn is_dirty(&self) -> bool {
         self.has_errors()
             || self.raw_value.borrow_mut().is_some()
-            || self.value_state.is_some() && *self.value_state != self.model_raw_value
+            || self.value_state.is_some() && *self.value_state != self.initial_value
     }
 
     pub fn value(&self) -> Option<S> {
@@ -86,7 +86,7 @@ where
     pub fn raw_value(&self) -> R {
         self.raw_value.borrow().clone().unwrap_or_else(|| {
             self.value_state.as_ref().cloned().unwrap_or_else(|| {
-                self.model_raw_value
+                self.initial_value
                     .clone()
                     .unwrap_or_else(|| Default::default())
             })
