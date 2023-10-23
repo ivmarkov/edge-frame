@@ -13,16 +13,14 @@ rust-version = "1.67"
 
 [features]
 default = ["web"]
-web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "yewdux", "yewdux-middleware", "dto", "embedded-svc/std"]
-middleware-ws = ["web", "wasm-bindgen", "wasm-bindgen-futures", "anyhow", "futures", "postcard", "gloo-net", "embassy-sync"]
-middleware-local = ["web", "wasm-bindgen-futures", "anyhow", "embassy-sync"]
+web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "yewdux", "yewdux-middleware", "dto", "embedded-svc/std", "wasm-bindgen", "wasm-bindgen-futures", "anyhow", "futures", "postcard", "gloo-net", "embassy-sync"]
 nightly = ["embedded-svc?/nightly"]
 dto = ["serde", "enumset", "strum", "strum_macros", "num_enum"]
 assets-serve = ["heapless", "log", "embedded-svc"]
 assets-prepare = ["anyhow", "flate2"]
 
 [dependencies]
-anyhow = { version = "1", optional = true }
+anyhow = { version = "1", default-features = false, optional = true }
 log = { version = "0.4", optional = true }
 heapless = { version = "0.7", optional = true, default-features = false }
 derive_more = { version = "0.99", optional = true }
@@ -39,13 +37,9 @@ strum_macros = { version = "0.25", optional = true }
 num_enum = { version = "0.7", default-features = false, optional = true }
 embedded-svc = { version = "0.26", optional = true, default-features = false, features = ["use_serde", "use_strum", "use_numenum"] }
 flate2 = { version = "1", optional = true }
-
-# middleware-ws
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 futures = { version = "0.3", optional = true }
 postcard = { version = "1", features = ["alloc"], optional = true }
 gloo-net = { version = "0.4", optional = true }
-
-# middleware-local
 embassy-sync = { version = "0.3", optional = true }
