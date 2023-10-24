@@ -21,9 +21,6 @@ compile_error!(
 #[cfg(all(feature = "assets-serve", feature = "web"))]
 compile_error!("Feature `assets-serve` is not compatible with feature `web`.");
 
-#[cfg(all(feature = "middleware-ws", feature = "middleware-local"))]
-compile_error!("Only one of the features `middleware-ws` and `middleware-local` can be enabled.");
-
 #[cfg(feature = "web")]
 pub use web::*;
 
