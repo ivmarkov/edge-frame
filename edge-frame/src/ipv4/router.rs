@@ -84,10 +84,11 @@ pub fn router(props: &RouterProps) -> Html {
         let secondary_dns = secondary_dns.clone();
 
         move |()| {
-            let has_errors = dhcp_server_enabled.has_errors()
-                || subnet.has_errors()
-                || dns.has_errors()
-                || secondary_dns.has_errors();
+            let has_errors = !disabled
+                && (dhcp_server_enabled.has_errors()
+                    || subnet.has_errors()
+                    || dns.has_errors()
+                    || secondary_dns.has_errors());
 
             let state = if has_errors {
                 RouterState::Errors

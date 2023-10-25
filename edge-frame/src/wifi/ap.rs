@@ -85,11 +85,12 @@ pub fn ap(props: &ApProps) -> Html {
         let password_confirm = password_confirm.clone();
 
         move |()| {
-            let has_errors = ssid.has_errors()
-                || hidden_ssid.has_errors()
-                || auth.has_errors()
-                || auth.value() != Some(AuthMethod::None)
-                    && (password.has_errors() || password_confirm.has_errors());
+            let has_errors = !disabled
+                && (ssid.has_errors()
+                    || hidden_ssid.has_errors()
+                    || auth.has_errors()
+                    || auth.value() != Some(AuthMethod::None)
+                        && (password.has_errors() || password_confirm.has_errors()));
 
             let state = if has_errors {
                 ApState::Errors

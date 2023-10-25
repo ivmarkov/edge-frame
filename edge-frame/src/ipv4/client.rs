@@ -105,12 +105,13 @@ pub fn client(props: &ClientProps) -> Html {
         let secondary_dns = secondary_dns.clone();
 
         move |()| {
-            let has_errors = dhcp_enabled.has_errors()
-                || dhcp_enabled.value() != Some(true)
-                    && (subnet.has_errors()
-                        || ip.has_errors()
-                        || dns.has_errors()
-                        || secondary_dns.has_errors());
+            let has_errors = !disabled
+                && (dhcp_enabled.has_errors()
+                    || dhcp_enabled.value() != Some(true)
+                        && (subnet.has_errors()
+                            || ip.has_errors()
+                            || dns.has_errors()
+                            || secondary_dns.has_errors()));
 
             let state = if has_errors {
                 ClientState::Errors
