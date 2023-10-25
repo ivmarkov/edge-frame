@@ -47,17 +47,44 @@ impl Reducer<WifiConfStore> for WifiConfState {
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
+#[cfg_attr(feature = "std", derive(Hash))]
+pub enum IpConfEditScope {
+    Disabled,
+    #[default]
+    Enabled,
+    Optional,
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub enum EditScope {
-    STA,
-    AP,
-    Mixed,
+    Sta(IpConfEditScope),
+    Ap(IpConfEditScope),
+    ApSta(IpConfEditScope, IpConfEditScope),
+}
+
+impl EditScope {
+    pub fn get_sta_ip_conf_scope(&self) -> IpConfEditScope {
+        match self {
+            Self::Sta(scope) => *scope,
+            Self::ApSta(_, scope) => *scope,
+            Self::Ap(_) => IpConfEditScope::Disabled,
+        }
+    }
+
+    pub fn get_ap_ip_conf_scope(&self) -> IpConfEditScope {
+        match self {
+            Self::Ap(scope) => *scope,
+            Self::ApSta(scope, _) => *scope,
+            Self::Sta(_) => IpConfEditScope::Disabled,
+        }
+    }
 }
 
 impl Default for EditScope {
     fn default() -> Self {
-        Self::STA
+        Self::Sta(Default::default())
     }
 }
 
@@ -97,11 +124,16 @@ pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static>(
 #[derive(Properties, Clone, Debug, PartialEq)]
 pub struct WifiProps {
     #[prop_or_default]
-    pub edit_scope: EditScope, // TODO
+    pub edit_scope: EditScope,
+
+    #[prop_or_default]
+    pub mobile: bool,
 }
 
 #[function_component(Wifi)]
-pub fn wifi(_props: &WifiProps) -> Html {
+pub fn wifi(props: &WifiProps) -> Html {
+    let edit_scope = props.edit_scope;
+
     let conf_store = use_store_value::<WifiConfStore>();
     let conf = conf_store.0.as_ref();
 
@@ -115,8 +147,18 @@ pub fn wifi(_props: &WifiProps) -> Html {
     let router_state = use_state(|| RouterState::Unchanged);
     let client_state = use_state(|| ClientState::Unchanged);
 
-    let router_enabled = use_state(|| initial_router_conf.is_some());
-    let client_enabled = use_state(|| initial_client_conf.is_some());
+    let router_enabled = use_state(|| {
+        matches!(edit_scope.get_ap_ip_conf_scope(), IpConfEditScope::Enabled)
+            || matches!(edit_scope.get_ap_ip_conf_scope(), IpConfEditScope::Optional)
+                && initial_router_conf.is_some()
+    });
+    let client_enabled = use_state(|| {
+        matches!(edit_scope.get_sta_ip_conf_scope(), IpConfEditScope::Enabled)
+            || matches!(
+                edit_scope.get_sta_ip_conf_scope(),
+                IpConfEditScope::Optional
+            ) && initial_client_conf.is_some()
+    });
 
     let new_conf = || {
         let ap_state = ap_state.clone();
@@ -127,14 +169,34 @@ pub fn wifi(_props: &WifiProps) -> Html {
         let client_enabled = client_enabled.clone();
 
         move || WifiConfState {
-            configuration: Configuration::Mixed(
-                sta_state.conf().cloned().unwrap_or(Default::default()),
-                ap_state.conf().cloned().unwrap_or(Default::default()),
-            ),
-            ap_ip_conf: router_enabled
-                .then(|| router_state.conf().cloned().unwrap_or(Default::default())),
-            sta_ip_conf: client_enabled
-                .then(|| client_state.conf().cloned().unwrap_or(Default::default())),
+            configuration: match edit_scope {
+                EditScope::Sta(_) => {
+                    Configuration::Client(sta_state.conf().cloned().unwrap_or(Default::default()))
+                }
+                EditScope::Ap(_) => Configuration::AccessPoint(
+                    ap_state.conf().cloned().unwrap_or(Default::default()),
+                ),
+                EditScope::ApSta(_, _) => Configuration::Mixed(
+                    sta_state.conf().cloned().unwrap_or(Default::default()),
+                    ap_state.conf().cloned().unwrap_or(Default::default()),
+                ),
+            },
+            ap_ip_conf: match edit_scope.get_ap_ip_conf_scope() {
+                IpConfEditScope::Disabled => None,
+                IpConfEditScope::Enabled => {
+                    Some(router_state.conf().cloned().unwrap_or(Default::default()))
+                }
+                IpConfEditScope::Optional => router_enabled
+                    .then(|| router_state.conf().cloned().unwrap_or(Default::default())),
+            },
+            sta_ip_conf: match edit_scope.get_sta_ip_conf_scope() {
+                IpConfEditScope::Disabled => None,
+                IpConfEditScope::Enabled => {
+                    Some(client_state.conf().cloned().unwrap_or(Default::default()))
+                }
+                IpConfEditScope::Optional => client_enabled
+                    .then(|| client_state.conf().cloned().unwrap_or(Default::default())),
+            },
         }
     };
 
@@ -146,7 +208,7 @@ pub fn wifi(_props: &WifiProps) -> Html {
         })
     };
 
-    let mobile = true;
+    let mobile = props.mobile;
 
     let ap_active = use_state(|| true);
     let switch = {
@@ -156,113 +218,135 @@ pub fn wifi(_props: &WifiProps) -> Html {
 
     let new_conf = new_conf();
 
+    let ap_html = || {
+        html! {
+            <>
+            <Ap conf={initial_ap_conf.unwrap_or_default()} state_changed={to_callback(ap_state.setter())}/>
+
+            {
+                if matches!(edit_scope.get_ap_ip_conf_scope(), IpConfEditScope::Optional) {
+                    html! {
+                        // IP Configuration
+                        <div class="field">
+                            <label class="checkbox">
+                                <input
+                                    type="checkbox"
+                                    checked={*router_enabled}
+                                    onclick={let router_enabled = router_enabled.clone(); Callback::from(move |_| { router_enabled.set(!*router_enabled)})}
+                                />
+                                {"IP Configuration"}
+                            </label>
+                        </div>
+                    }
+                } else {
+                    html! {}
+                }
+            }
+
+            {
+                if matches!(edit_scope.get_ap_ip_conf_scope(), IpConfEditScope::Enabled | IpConfEditScope::Optional) {
+                    html! {
+                        <Router conf={initial_router_conf.unwrap_or_default()} disabled={!*router_enabled} state_changed={to_callback(router_state.setter())}/>
+                    }
+                } else {
+                    html! {}
+                }
+            }
+            </>
+        }
+    };
+
+    let sta_html = || {
+        html! {
+            <>
+            <Sta conf={initial_sta_conf.unwrap_or_default()} state_changed={to_callback(sta_state.setter())}/>
+
+            {
+                if matches!(edit_scope.get_sta_ip_conf_scope(), IpConfEditScope::Optional) {
+                    html! {
+                        // IP Configuration
+                        <div class="field">
+                            <label class="checkbox">
+                                <input
+                                    type="checkbox"
+                                    checked={*client_enabled}
+                                    onclick={let client_enabled = client_enabled.clone(); Callback::from(move |_| { client_enabled.set(!*client_enabled)})}
+                                    />
+                                {"IP Configuration"}
+                            </label>
+                        </div>
+                    }
+                } else {
+                    html! {}
+                }
+            }
+
+            {
+                if matches!(edit_scope.get_sta_ip_conf_scope(), IpConfEditScope::Enabled | IpConfEditScope::Optional) {
+                    html! {
+                        <Client conf={initial_client_conf.unwrap_or_default()} disabled={!*client_enabled} state_changed={to_callback(client_state.setter())}/>
+                    }
+                } else {
+                    html! {}
+                }
+            }
+            </>
+        }
+    };
+
     html! {
         <>
         <div class="container">
         {
-            if mobile {
+            if matches!(edit_scope, EditScope::ApSta(_, _)) {
+                if mobile {
+                    html! {
+                        <>
+                        <div class="tabs">
+                            <ul>
+                                <li class={if_true(*ap_active, "is-active")}>
+                                    <a class={if_true(matches!(&*ap_state, ApState::Errors) || *router_enabled && matches!(&*router_state, RouterState::Errors), "has-text-danger")} href="javascript:void(0);" onclick={switch.clone()}>{format!("Access Point{}", if !matches!(&*ap_state, ApState::Unchanged) { "*" } else { "" })}</a>
+                                </li>
+                                <li class={if_true(!*ap_active, "is-active")}>
+                                    <a class={if_true(matches!(&*sta_state, StaState::Errors) || *client_enabled && matches!(&*client_state, ClientState::Errors), "has-text-danger")} href="javascript:void(0);" onclick={switch}>{format!("Client{}", if !matches!(&*sta_state, StaState::Unchanged) { "*" } else { "" })}</a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div>
+                            { if *ap_active { ap_html() } else { sta_html() } }
+                        </div>
+                        </>
+                    }
+                } else {
+                    html! {
+                        <div class="tile is-ancestor">
+                            <div class="tile is-4 is-vertical is-parent">
+                                <div class="tile is-child box">
+                                    <p class={classes!("title", if_true(matches!(&*ap_state, ApState::Errors), "is-danger"))}>{format!("Access Point{}", if !matches!(&*ap_state, ApState::Unchanged) { "*" } else { "" })}</p>
+
+                                    { ap_html() }
+                                </div>
+                            </div>
+                            <div class="tile is-4 is-vertical is-parent">
+                                <div class="tile is-child box">
+                                    <p class={classes!("title", if_true(matches!(&*sta_state, StaState::Errors), "is-danger"))}>{format!("Client{}", if !matches!(&*sta_state, StaState::Unchanged) { "*" } else { "" })}</p>
+
+                                    { sta_html() }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            } else if matches!(edit_scope, EditScope::Ap(_)) {
                 html! {
-                    <>
-                    <div class="tabs">
-                        <ul>
-                            <li class={if_true(*ap_active, "is-active")}>
-                                <a class={if_true(matches!(&*ap_state, ApState::Errors) || *router_enabled && matches!(&*router_state, RouterState::Errors), "has-text-danger")} href="javascript:void(0);" onclick={switch.clone()}>{format!("Access Point{}", if !matches!(&*ap_state, ApState::Unchanged) { "*" } else { "" })}</a>
-                            </li>
-                            <li class={if_true(!*ap_active, "is-active")}>
-                                <a class={if_true(matches!(&*sta_state, StaState::Errors) || *client_enabled && matches!(&*client_state, ClientState::Errors), "has-text-danger")} href="javascript:void(0);" onclick={switch}>{format!("Client{}", if !matches!(&*sta_state, StaState::Unchanged) { "*" } else { "" })}</a>
-                            </li>
-                        </ul>
+                    <div class="tile is-child box">
+                        { ap_html() }
                     </div>
-                    <div>
-                        {
-                            if *ap_active {
-                                html! {
-                                    <>
-                                    <Ap conf={initial_ap_conf.unwrap_or_default()} state_changed={to_callback(ap_state.setter())}/>
-
-                                    // IP Configuration
-                                    <div class="field">
-                                        <label class="checkbox">
-                                            <input
-                                                type="checkbox"
-                                                checked={*router_enabled}
-                                                onclick={let router_enabled = router_enabled.clone(); Callback::from(move |_| { router_enabled.set(!*router_enabled)})}
-                                            />
-                                            {"IP Configuration"}
-                                        </label>
-                                    </div>
-
-                                    <Router conf={initial_router_conf.unwrap_or_default()} disabled={!*router_enabled} state_changed={to_callback(router_state.setter())}/>
-                                    </>
-                                }
-                            } else {
-                                html! {
-                                    <>
-                                    <Sta conf={initial_sta_conf.unwrap_or_default()} state_changed={to_callback(sta_state.setter())}/>
-
-                                    // IP Configuration
-                                    <div class="field">
-                                        <label class="checkbox">
-                                            <input
-                                                type="checkbox"
-                                                checked={*client_enabled}
-                                                onclick={let client_enabled = client_enabled.clone(); Callback::from(move |_| { client_enabled.set(!*client_enabled)})}
-                                                />
-                                            {"IP Configuration"}
-                                        </label>
-                                    </div>
-
-                                    <Client conf={initial_client_conf.unwrap_or_default()} disabled={!*client_enabled} state_changed={to_callback(client_state.setter())}/>
-                                    </>
-                                }
-                            }
-                        }
-                    </div>
-                    </>
                 }
             } else {
                 html! {
-                    <div class="tile is-ancestor">
-                        <div class="tile is-4 is-vertical is-parent">
-                            <div class="tile is-child box">
-                                <p class={classes!("title", if_true(matches!(&*ap_state, ApState::Errors), "is-danger"))}>{format!("Access Point{}", if !matches!(&*ap_state, ApState::Unchanged) { "*" } else { "" })}</p>
-                                <Ap conf={initial_ap_conf.unwrap_or_default()} state_changed={to_callback(ap_state.setter())}/>
-
-                                // IP Configuration
-                                <div class="field">
-                                    <label class="checkbox">
-                                        <input
-                                            type="checkbox"
-                                            checked={*router_enabled}
-                                            onclick={let router_enabled = router_enabled.clone(); Callback::from(move |_| { router_enabled.set(!*router_enabled)})}
-                                            />
-                                        {"IP Configuration"}
-                                    </label>
-                                </div>
-
-                                <Router conf={initial_router_conf.unwrap_or_default()} disabled={!*router_enabled} state_changed={to_callback(router_state.setter())}/>
-                            </div>
-                        </div>
-                        <div class="tile is-4 is-vertical is-parent">
-                            <div class="tile is-child box">
-                                <p class={classes!("title", if_true(matches!(&*sta_state, StaState::Errors), "is-danger"))}>{format!("Client{}", if !matches!(&*sta_state, StaState::Unchanged) { "*" } else { "" })}</p>
-                                <Sta conf={initial_sta_conf.unwrap_or_default()} state_changed={to_callback(sta_state.setter())}/>
-
-                                // IP Configuration
-                                <div class="field">
-                                    <label class="checkbox">
-                                        <input
-                                            type="checkbox"
-                                            checked={*client_enabled}
-                                            onclick={let client_enabled = client_enabled.clone(); Callback::from(move |_| { client_enabled.set(!*client_enabled)})}
-                                            />
-                                        {"IP Configuration"}
-                                    </label>
-                                </div>
-
-                                <Client conf={initial_client_conf.unwrap_or_default()} disabled={!*client_enabled} state_changed={to_callback(client_state.setter())}/>
-                            </div>
-                        </div>
+                    <div class="tile is-child box">
+                        { sta_html() }
                     </div>
                 }
             }
