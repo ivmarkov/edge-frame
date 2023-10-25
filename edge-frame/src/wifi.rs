@@ -49,7 +49,7 @@ impl Reducer<WifiConfStore> for WifiConfState {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "std", derive(Hash))]
-pub enum IpConfEditScope {
+pub enum WifiIpConfScope {
     Disabled,
     #[default]
     Enabled,
@@ -58,31 +58,31 @@ pub enum IpConfEditScope {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Hash))]
-pub enum EditScope {
-    Sta(IpConfEditScope),
-    Ap(IpConfEditScope),
-    ApSta(IpConfEditScope, IpConfEditScope),
+pub enum WifiConfScope {
+    Sta(WifiIpConfScope),
+    Ap(WifiIpConfScope),
+    ApSta(WifiIpConfScope, WifiIpConfScope),
 }
 
-impl EditScope {
-    pub fn get_sta_ip_conf_scope(&self) -> IpConfEditScope {
+impl WifiConfScope {
+    pub fn get_sta_ip_conf_scope(&self) -> WifiIpConfScope {
         match self {
             Self::Sta(scope) => *scope,
             Self::ApSta(_, scope) => *scope,
-            Self::Ap(_) => IpConfEditScope::Disabled,
+            Self::Ap(_) => WifiIpConfScope::Disabled,
         }
     }
 
-    pub fn get_ap_ip_conf_scope(&self) -> IpConfEditScope {
+    pub fn get_ap_ip_conf_scope(&self) -> WifiIpConfScope {
         match self {
             Self::Ap(scope) => *scope,
             Self::ApSta(scope, _) => *scope,
-            Self::Sta(_) => IpConfEditScope::Disabled,
+            Self::Sta(_) => WifiIpConfScope::Disabled,
         }
     }
 }
 
-impl Default for EditScope {
+impl Default for WifiConfScope {
     fn default() -> Self {
         Self::Sta(Default::default())
     }
@@ -124,7 +124,7 @@ pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static>(
 #[derive(Properties, Clone, Debug, PartialEq)]
 pub struct WifiProps {
     #[prop_or_default]
-    pub edit_scope: EditScope,
+    pub conf_scope: WifiConfScope,
 
     #[prop_or_default]
     pub mobile: bool,
@@ -132,7 +132,7 @@ pub struct WifiProps {
 
 #[function_component(Wifi)]
 pub fn wifi(props: &WifiProps) -> Html {
-    let edit_scope = props.edit_scope;
+    let conf_scope = props.conf_scope;
 
     let conf_store = use_store_value::<WifiConfStore>();
     let conf = conf_store.0.as_ref();
@@ -148,15 +148,15 @@ pub fn wifi(props: &WifiProps) -> Html {
     let client_state = use_state(|| ClientState::Unchanged);
 
     let router_enabled = use_state(|| {
-        matches!(edit_scope.get_ap_ip_conf_scope(), IpConfEditScope::Enabled)
-            || matches!(edit_scope.get_ap_ip_conf_scope(), IpConfEditScope::Optional)
+        matches!(conf_scope.get_ap_ip_conf_scope(), WifiIpConfScope::Enabled)
+            || matches!(conf_scope.get_ap_ip_conf_scope(), WifiIpConfScope::Optional)
                 && initial_router_conf.is_some()
     });
     let client_enabled = use_state(|| {
-        matches!(edit_scope.get_sta_ip_conf_scope(), IpConfEditScope::Enabled)
+        matches!(conf_scope.get_sta_ip_conf_scope(), WifiIpConfScope::Enabled)
             || matches!(
-                edit_scope.get_sta_ip_conf_scope(),
-                IpConfEditScope::Optional
+                conf_scope.get_sta_ip_conf_scope(),
+                WifiIpConfScope::Optional
             ) && initial_client_conf.is_some()
     });
 
@@ -169,32 +169,32 @@ pub fn wifi(props: &WifiProps) -> Html {
         let client_enabled = client_enabled.clone();
 
         move || WifiConfState {
-            configuration: match edit_scope {
-                EditScope::Sta(_) => {
+            configuration: match conf_scope {
+                WifiConfScope::Sta(_) => {
                     Configuration::Client(sta_state.conf().cloned().unwrap_or(Default::default()))
                 }
-                EditScope::Ap(_) => Configuration::AccessPoint(
+                WifiConfScope::Ap(_) => Configuration::AccessPoint(
                     ap_state.conf().cloned().unwrap_or(Default::default()),
                 ),
-                EditScope::ApSta(_, _) => Configuration::Mixed(
+                WifiConfScope::ApSta(_, _) => Configuration::Mixed(
                     sta_state.conf().cloned().unwrap_or(Default::default()),
                     ap_state.conf().cloned().unwrap_or(Default::default()),
                 ),
             },
-            ap_ip_conf: match edit_scope.get_ap_ip_conf_scope() {
-                IpConfEditScope::Disabled => None,
-                IpConfEditScope::Enabled => {
+            ap_ip_conf: match conf_scope.get_ap_ip_conf_scope() {
+                WifiIpConfScope::Disabled => None,
+                WifiIpConfScope::Enabled => {
                     Some(router_state.conf().cloned().unwrap_or(Default::default()))
                 }
-                IpConfEditScope::Optional => router_enabled
+                WifiIpConfScope::Optional => router_enabled
                     .then(|| router_state.conf().cloned().unwrap_or(Default::default())),
             },
-            sta_ip_conf: match edit_scope.get_sta_ip_conf_scope() {
-                IpConfEditScope::Disabled => None,
-                IpConfEditScope::Enabled => {
+            sta_ip_conf: match conf_scope.get_sta_ip_conf_scope() {
+                WifiIpConfScope::Disabled => None,
+                WifiIpConfScope::Enabled => {
                     Some(client_state.conf().cloned().unwrap_or(Default::default()))
                 }
-                IpConfEditScope::Optional => client_enabled
+                WifiIpConfScope::Optional => client_enabled
                     .then(|| client_state.conf().cloned().unwrap_or(Default::default())),
             },
         }
@@ -224,7 +224,7 @@ pub fn wifi(props: &WifiProps) -> Html {
             <Ap conf={initial_ap_conf.unwrap_or_default()} state_changed={to_callback(ap_state.setter())}/>
 
             {
-                if matches!(edit_scope.get_ap_ip_conf_scope(), IpConfEditScope::Optional) {
+                if matches!(conf_scope.get_ap_ip_conf_scope(), WifiIpConfScope::Optional) {
                     html! {
                         // IP Configuration
                         <div class="field">
@@ -244,7 +244,7 @@ pub fn wifi(props: &WifiProps) -> Html {
             }
 
             {
-                if matches!(edit_scope.get_ap_ip_conf_scope(), IpConfEditScope::Enabled | IpConfEditScope::Optional) {
+                if matches!(conf_scope.get_ap_ip_conf_scope(), WifiIpConfScope::Enabled | WifiIpConfScope::Optional) {
                     html! {
                         <Router conf={initial_router_conf.unwrap_or_default()} disabled={!*router_enabled} state_changed={to_callback(router_state.setter())}/>
                     }
@@ -262,7 +262,7 @@ pub fn wifi(props: &WifiProps) -> Html {
             <Sta conf={initial_sta_conf.unwrap_or_default()} state_changed={to_callback(sta_state.setter())}/>
 
             {
-                if matches!(edit_scope.get_sta_ip_conf_scope(), IpConfEditScope::Optional) {
+                if matches!(conf_scope.get_sta_ip_conf_scope(), WifiIpConfScope::Optional) {
                     html! {
                         // IP Configuration
                         <div class="field">
@@ -282,7 +282,7 @@ pub fn wifi(props: &WifiProps) -> Html {
             }
 
             {
-                if matches!(edit_scope.get_sta_ip_conf_scope(), IpConfEditScope::Enabled | IpConfEditScope::Optional) {
+                if matches!(conf_scope.get_sta_ip_conf_scope(), WifiIpConfScope::Enabled | WifiIpConfScope::Optional) {
                     html! {
                         <Client conf={initial_client_conf.unwrap_or_default()} disabled={!*client_enabled} state_changed={to_callback(client_state.setter())}/>
                     }
@@ -298,7 +298,7 @@ pub fn wifi(props: &WifiProps) -> Html {
         <>
         <div class="container">
         {
-            if matches!(edit_scope, EditScope::ApSta(_, _)) {
+            if matches!(conf_scope, WifiConfScope::ApSta(_, _)) {
                 if mobile {
                     html! {
                         <>
@@ -337,7 +337,7 @@ pub fn wifi(props: &WifiProps) -> Html {
                         </div>
                     }
                 }
-            } else if matches!(edit_scope, EditScope::Ap(_)) {
+            } else if matches!(conf_scope, WifiConfScope::Ap(_)) {
                 html! {
                     <div class="tile is-child box">
                         { ap_html() }
