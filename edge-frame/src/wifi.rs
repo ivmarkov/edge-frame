@@ -186,7 +186,7 @@ pub fn wifi(_props: &WifiProps) -> Html {
                                             <input
                                                 type="checkbox"
                                                 checked={*router_enabled}
-                                                onclick={let router_enabled = router_enabled.clone(); Callback::from(move |_| { router_enabled.set(*router_enabled)})}
+                                                onclick={let router_enabled = router_enabled.clone(); Callback::from(move |_| { router_enabled.set(!*router_enabled)})}
                                             />
                                             {"IP Configuration"}
                                         </label>
@@ -206,7 +206,7 @@ pub fn wifi(_props: &WifiProps) -> Html {
                                             <input
                                                 type="checkbox"
                                                 checked={*client_enabled}
-                                                onclick={let client_enabled = client_enabled.clone(); Callback::from(move |_| { client_enabled.set(*client_enabled)})}
+                                                onclick={let client_enabled = client_enabled.clone(); Callback::from(move |_| { client_enabled.set(!*client_enabled)})}
                                                 />
                                             {"IP Configuration"}
                                         </label>
@@ -234,7 +234,7 @@ pub fn wifi(_props: &WifiProps) -> Html {
                                         <input
                                             type="checkbox"
                                             checked={*router_enabled}
-                                            onclick={let router_enabled = router_enabled.clone(); Callback::from(move |_| { router_enabled.set(*router_enabled)})}
+                                            onclick={let router_enabled = router_enabled.clone(); Callback::from(move |_| { router_enabled.set(!*router_enabled)})}
                                             />
                                         {"IP Configuration"}
                                     </label>
@@ -254,7 +254,7 @@ pub fn wifi(_props: &WifiProps) -> Html {
                                         <input
                                             type="checkbox"
                                             checked={*client_enabled}
-                                            onclick={let client_enabled = client_enabled.clone(); Callback::from(move |_| { client_enabled.set(*client_enabled)})}
+                                            onclick={let client_enabled = client_enabled.clone(); Callback::from(move |_| { client_enabled.set(!*client_enabled)})}
                                             />
                                         {"IP Configuration"}
                                     </label>
