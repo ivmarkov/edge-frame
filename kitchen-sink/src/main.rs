@@ -4,7 +4,6 @@ use core::fmt::Debug;
 
 use std::rc::Rc;
 
-use edge_frame::wifi::WifiConf;
 use log::Level;
 
 use yew::prelude::*;

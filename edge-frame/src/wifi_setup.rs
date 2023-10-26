@@ -5,7 +5,9 @@ use yew_router::Routable;
 use yewdux_middleware::*;
 
 use crate::frame::{RouteNavItem, RouteStatusItem};
-use crate::wifi::{Wifi, WifiConf, WifiConfScope, WifiState};
+use crate::wifi::{Wifi, WifiState};
+
+pub use crate::wifi::{WifiConf, WifiConfScope};
 
 #[derive(Default, Clone, Debug, Eq, PartialEq, Store)]
 pub struct WifiConfStore(pub Option<WifiConf>);
