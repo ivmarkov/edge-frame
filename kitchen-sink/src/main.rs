@@ -4,6 +4,7 @@ use core::fmt::Debug;
 
 use std::rc::Rc;
 
+use edge_frame::wifi::WifiConf;
 use log::Level;
 
 use yew::prelude::*;
@@ -13,7 +14,7 @@ use yewdux_middleware::*;
 use edge_frame::frame::*;
 use edge_frame::middleware::*;
 use edge_frame::role::*;
-use edge_frame::wifi::*;
+use edge_frame::wifi_setup::*;
 
 #[derive(Debug, Routable, Copy, Clone, PartialEq, Eq, Hash)]
 enum Routes {
@@ -72,7 +73,7 @@ fn render(route: Routes) -> Html {
                         },
                         Routes::Wifi => html! {
                             <Role role={RoleDto::Admin} auth=true>
-                                <Wifi/>
+                                <WifiSetup/>
                             </Role>
                         },
                     }
@@ -84,13 +85,13 @@ fn render(route: Routes) -> Html {
 
 fn init_middleware() {
     dispatch::register(store_dispatch::<RoleStore, RoleState>());
-    dispatch::register(store_dispatch::<WifiConfStore, WifiConfState>());
+    dispatch::register(store_dispatch::<WifiConfStore, WifiConf>());
 
     dispatch::invoke(RoleState::Role(RoleDto::Admin));
-    dispatch::invoke(WifiConfState::default());
+    dispatch::invoke(WifiConf::default());
 }
 
-// Set the middleware for each store type (PinsState & DisplaysState)
+// Set the middleware for each store type
 fn store_dispatch<S, M>() -> impl MiddlewareDispatch<M> + Clone
 where
     S: Store + Debug,

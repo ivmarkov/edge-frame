@@ -10,6 +10,7 @@ use crate::util::*;
 
 pub type ClientConf = ipv4::ClientConfiguration;
 
+#[derive(Clone)]
 pub enum ClientState {
     Unchanged,
     Errors,

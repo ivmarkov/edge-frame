@@ -1,49 +1,31 @@
-use std::rc::Rc;
-
 use yew::prelude::*;
-use yew_router::Routable;
-use yewdux_middleware::*;
 
 use embedded_svc::ipv4;
 use embedded_svc::wifi::Configuration;
 
-use crate::frame::{RouteNavItem, RouteStatusItem};
 use crate::ipv4::client::{Client, ClientState};
 use crate::ipv4::router::{Router, RouterState};
+use crate::util::*;
 use crate::wifi::ap::{Ap, ApState};
 use crate::wifi::sta::{Sta, StaState};
-use crate::{to_callback, util::*};
 
 pub mod ap;
 pub mod sta;
 
-#[derive(Default, Clone, Debug, Eq, PartialEq, Store)]
-pub struct WifiConfStore(pub Option<WifiConfState>);
-
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WifiConfState {
-    pub configuration: Configuration,
+pub struct WifiConf {
+    pub conf: Configuration,
     pub ap_ip_conf: Option<ipv4::RouterConfiguration>,
     pub sta_ip_conf: Option<ipv4::ClientConfiguration>,
 }
 
-impl Default for WifiConfState {
+impl Default for WifiConf {
     fn default() -> Self {
         Self {
-            configuration: Configuration::Mixed(Default::default(), Default::default()),
+            conf: Configuration::Mixed(Default::default(), Default::default()),
             ap_ip_conf: Some(Default::default()),
             sta_ip_conf: Some(Default::default()),
         }
-    }
-}
-
-impl Reducer<WifiConfStore> for WifiConfState {
-    fn apply(self, mut store: Rc<WifiConfStore>) -> Rc<WifiConfStore> {
-        let state = Rc::make_mut(&mut store);
-
-        state.0 = Some(self);
-
-        store
     }
 }
 
@@ -88,59 +70,92 @@ impl Default for WifiConfScope {
     }
 }
 
-#[derive(Properties, Clone, Debug, PartialEq, Eq)]
-pub struct WifiNavItemProps<R: Routable + PartialEq + Clone + 'static> {
-    pub route: R,
+#[derive(Clone)]
+pub enum WifiState {
+    Unchanged,
+    Errors,
+    Conf(WifiConf),
 }
 
-#[function_component(WifiNavItem)]
-pub fn wifi_nav_item<R: Routable + PartialEq + Clone + 'static>(
-    props: &WifiNavItemProps<R>,
-) -> Html {
-    html! {
-        <RouteNavItem<R>
-            text="Wifi"
-            icon="fa-solid fa-wifi"
-            route={props.route.clone()}/>
+impl WifiState {
+    pub fn conf(&self) -> Option<&WifiConf> {
+        if let Self::Conf(conf) = self {
+            Some(conf)
+        } else {
+            None
+        }
     }
 }
 
-#[derive(Properties, Clone, Debug, PartialEq)]
-pub struct WifiStatusItemProps<R: Routable + PartialEq + Clone + 'static> {
-    pub route: R,
+enum Change {
+    None,
+    Ap(ApState),
+    Sta(StaState),
+    ApIp(RouterState),
+    StaIp(ClientState),
 }
 
-#[function_component(WifiStatusItem)]
-pub fn wifi_status_item<R: Routable + PartialEq + Clone + 'static>(
-    props: &WifiStatusItemProps<R>,
-) -> Html {
-    html! {
-        <RouteStatusItem<R>
-            icon="fa-lg fa-solid fa-wifi"
-            route={props.route.clone()}/>
+impl Change {
+    fn ap_state(&self) -> Option<&ApState> {
+        if let Self::Ap(state) = self {
+            Some(state)
+        } else {
+            None
+        }
+    }
+
+    fn sta_state(&self) -> Option<&StaState> {
+        if let Self::Sta(state) = self {
+            Some(state)
+        } else {
+            None
+        }
+    }
+
+    fn ap_ip_state(&self) -> Option<&RouterState> {
+        if let Self::ApIp(state) = self {
+            Some(state)
+        } else {
+            None
+        }
+    }
+
+    fn sta_ip_state(&self) -> Option<&ClientState> {
+        if let Self::StaIp(state) = self {
+            Some(state)
+        } else {
+            None
+        }
     }
 }
 
 #[derive(Properties, Clone, Debug, PartialEq)]
 pub struct WifiProps {
     #[prop_or_default]
+    pub conf: WifiConf,
+
+    #[prop_or_default]
     pub conf_scope: WifiConfScope,
 
     #[prop_or_default]
     pub mobile: bool,
+
+    #[prop_or_default]
+    pub disabled: bool,
+
+    pub state_changed: Callback<WifiState, ()>,
 }
 
 #[function_component(Wifi)]
 pub fn wifi(props: &WifiProps) -> Html {
+    let conf = &props.conf;
     let conf_scope = props.conf_scope;
+    let disabled = props.disabled;
 
-    let conf_store = use_store_value::<WifiConfStore>();
-    let conf = conf_store.0.as_ref();
-
-    let initial_ap_conf = conf.and_then(|c| c.configuration.as_ap_conf_ref().cloned());
-    let initial_sta_conf = conf.and_then(|c| c.configuration.as_client_conf_ref().cloned());
-    let initial_router_conf = conf.and_then(|c| c.ap_ip_conf.as_ref().cloned());
-    let initial_client_conf = conf.and_then(|c| c.sta_ip_conf.as_ref().cloned());
+    let initial_ap_conf = conf.conf.as_ap_conf_ref().cloned();
+    let initial_sta_conf = conf.conf.as_client_conf_ref().cloned();
+    let initial_router_conf = conf.ap_ip_conf.as_ref().cloned();
+    let initial_client_conf = conf.sta_ip_conf.as_ref().cloned();
 
     let ap_state = use_state(|| ApState::Unchanged);
     let sta_state = use_state(|| StaState::Unchanged);
@@ -160,7 +175,8 @@ pub fn wifi(props: &WifiProps) -> Html {
             ) && initial_client_conf.is_some()
     });
 
-    let new_conf = || {
+    let new_state = || {
+        let state_changed = props.state_changed.clone();
         let ap_state = ap_state.clone();
         let sta_state = sta_state.clone();
         let router_state = router_state.clone();
@@ -168,43 +184,120 @@ pub fn wifi(props: &WifiProps) -> Html {
         let router_enabled = router_enabled.clone();
         let client_enabled = client_enabled.clone();
 
-        move || WifiConfState {
-            configuration: match conf_scope {
-                WifiConfScope::Sta(_) => {
-                    Configuration::Client(sta_state.conf().cloned().unwrap_or(Default::default()))
-                }
-                WifiConfScope::Ap(_) => Configuration::AccessPoint(
-                    ap_state.conf().cloned().unwrap_or(Default::default()),
-                ),
-                WifiConfScope::ApSta(_, _) => Configuration::Mixed(
-                    sta_state.conf().cloned().unwrap_or(Default::default()),
-                    ap_state.conf().cloned().unwrap_or(Default::default()),
-                ),
-            },
-            ap_ip_conf: match conf_scope.get_ap_ip_conf_scope() {
-                WifiIpConfScope::Disabled => None,
-                WifiIpConfScope::Enabled => {
-                    Some(router_state.conf().cloned().unwrap_or(Default::default()))
-                }
-                WifiIpConfScope::Optional => router_enabled
-                    .then(|| router_state.conf().cloned().unwrap_or(Default::default())),
-            },
-            sta_ip_conf: match conf_scope.get_sta_ip_conf_scope() {
-                WifiIpConfScope::Disabled => None,
-                WifiIpConfScope::Enabled => {
-                    Some(client_state.conf().cloned().unwrap_or(Default::default()))
-                }
-                WifiIpConfScope::Optional => client_enabled
-                    .then(|| client_state.conf().cloned().unwrap_or(Default::default())),
-            },
+        move |change| {
+            match &change {
+                Change::Ap(state) => ap_state.set(state.clone()),
+                Change::Sta(state) => sta_state.set(state.clone()),
+                Change::ApIp(state) => router_state.set(state.clone()),
+                Change::StaIp(state) => client_state.set(state.clone()),
+                _ => (),
+            }
+
+            let ap_state = change.ap_state().unwrap_or(&*ap_state);
+            let sta_state = change.sta_state().unwrap_or(&*sta_state);
+            let router_state = change.ap_ip_state().unwrap_or(&*router_state);
+            let client_state = change.sta_ip_state().unwrap_or(&*client_state);
+            let router_enabled = router_enabled.clone();
+            let client_enabled = client_enabled.clone();
+
+            let state = if matches!(ap_state, ApState::Errors)
+                || matches!(sta_state, StaState::Errors)
+                || matches!(router_state, RouterState::Errors)
+                || matches!(client_state, ClientState::Errors)
+            {
+                WifiState::Errors
+            } else if matches!(ap_state, ApState::Unchanged)
+                && matches!(sta_state, StaState::Unchanged)
+                && matches!(router_state, RouterState::Unchanged)
+                && matches!(client_state, ClientState::Unchanged)
+            {
+                WifiState::Unchanged
+            } else {
+                WifiState::Conf(WifiConf {
+                    conf: match conf_scope {
+                        WifiConfScope::Sta(_) => Configuration::Client(
+                            sta_state.conf().cloned().unwrap_or(Default::default()),
+                        ),
+                        WifiConfScope::Ap(_) => Configuration::AccessPoint(
+                            ap_state.conf().cloned().unwrap_or(Default::default()),
+                        ),
+                        WifiConfScope::ApSta(_, _) => Configuration::Mixed(
+                            sta_state.conf().cloned().unwrap_or(Default::default()),
+                            ap_state.conf().cloned().unwrap_or(Default::default()),
+                        ),
+                    },
+                    ap_ip_conf: match conf_scope.get_ap_ip_conf_scope() {
+                        WifiIpConfScope::Disabled => None,
+                        WifiIpConfScope::Enabled => {
+                            Some(router_state.conf().cloned().unwrap_or(Default::default()))
+                        }
+                        WifiIpConfScope::Optional => router_enabled
+                            .then(|| router_state.conf().cloned().unwrap_or(Default::default())),
+                    },
+                    sta_ip_conf: match conf_scope.get_sta_ip_conf_scope() {
+                        WifiIpConfScope::Disabled => None,
+                        WifiIpConfScope::Enabled => {
+                            Some(client_state.conf().cloned().unwrap_or(Default::default()))
+                        }
+                        WifiIpConfScope::Optional => client_enabled
+                            .then(|| client_state.conf().cloned().unwrap_or(Default::default())),
+                    },
+                })
+            };
+
+            state_changed.emit(state);
         }
     };
 
-    let onclick = {
-        let new_conf = new_conf();
+    let changed_ap = {
+        let new_state = new_state();
+
+        Callback::from(move |state| {
+            new_state(Change::Ap(state));
+        })
+    };
+
+    let changed_sta = {
+        let new_state = new_state();
+
+        Callback::from(move |state| {
+            new_state(Change::Sta(state));
+        })
+    };
+
+    let changed_ap_ip = {
+        let new_state = new_state();
+
+        Callback::from(move |state| {
+            new_state(Change::ApIp(state));
+        })
+    };
+
+    let changed_sta_ip = {
+        let new_state = new_state();
+
+        Callback::from(move |state| {
+            new_state(Change::StaIp(state));
+        })
+    };
+
+    let router_changed = || {
+        let router_enabled = router_enabled.clone();
+        let new_state = new_state();
 
         Callback::from(move |_| {
-            dispatch::invoke(new_conf());
+            router_enabled.set(!*router_enabled);
+            new_state(Change::None);
+        })
+    };
+
+    let client_changed = || {
+        let client_enabled = client_enabled.clone();
+        let new_state = new_state();
+
+        Callback::from(move |_| {
+            client_enabled.set(!*client_enabled);
+            new_state(Change::None);
         })
     };
 
@@ -216,12 +309,10 @@ pub fn wifi(props: &WifiProps) -> Html {
         Callback::from(move |_| ap_active.set(!*ap_active))
     };
 
-    let new_conf = new_conf();
-
     let ap_html = || {
         html! {
             <>
-            <Ap conf={initial_ap_conf.unwrap_or_default()} state_changed={to_callback(ap_state.setter())}/>
+            <Ap conf={initial_ap_conf.unwrap_or_default()} state_changed={changed_ap} disabled={disabled}/>
 
             {
                 if matches!(conf_scope.get_ap_ip_conf_scope(), WifiIpConfScope::Optional) {
@@ -232,7 +323,8 @@ pub fn wifi(props: &WifiProps) -> Html {
                                 <input
                                     type="checkbox"
                                     checked={*router_enabled}
-                                    onclick={let router_enabled = router_enabled.clone(); Callback::from(move |_| { router_enabled.set(!*router_enabled)})}
+                                    onclick={router_changed()}
+                                    disabled={disabled}
                                 />
                                 {"IP Configuration"}
                             </label>
@@ -246,7 +338,7 @@ pub fn wifi(props: &WifiProps) -> Html {
             {
                 if matches!(conf_scope.get_ap_ip_conf_scope(), WifiIpConfScope::Enabled | WifiIpConfScope::Optional) {
                     html! {
-                        <Router conf={initial_router_conf.unwrap_or_default()} disabled={!*router_enabled} state_changed={to_callback(router_state.setter())}/>
+                        <Router conf={initial_router_conf.unwrap_or_default()} disabled={!*router_enabled} state_changed={changed_ap_ip} disabled={disabled}/>
                     }
                 } else {
                     html! {}
@@ -259,7 +351,7 @@ pub fn wifi(props: &WifiProps) -> Html {
     let sta_html = || {
         html! {
             <>
-            <Sta conf={initial_sta_conf.unwrap_or_default()} state_changed={to_callback(sta_state.setter())}/>
+            <Sta conf={initial_sta_conf.unwrap_or_default()} state_changed={changed_sta} disabled={disabled}/>
 
             {
                 if matches!(conf_scope.get_sta_ip_conf_scope(), WifiIpConfScope::Optional) {
@@ -270,7 +362,8 @@ pub fn wifi(props: &WifiProps) -> Html {
                                 <input
                                     type="checkbox"
                                     checked={*client_enabled}
-                                    onclick={let client_enabled = client_enabled.clone(); Callback::from(move |_| { client_enabled.set(!*client_enabled)})}
+                                    onclick={client_changed()}
+                                    disabled={disabled}
                                     />
                                 {"IP Configuration"}
                             </label>
@@ -284,7 +377,7 @@ pub fn wifi(props: &WifiProps) -> Html {
             {
                 if matches!(conf_scope.get_sta_ip_conf_scope(), WifiIpConfScope::Enabled | WifiIpConfScope::Optional) {
                     html! {
-                        <Client conf={initial_client_conf.unwrap_or_default()} disabled={!*client_enabled} state_changed={to_callback(client_state.setter())}/>
+                        <Client conf={initial_client_conf.unwrap_or_default()} disabled={!*client_enabled} state_changed={changed_sta_ip} disabled={disabled}/>
                     }
                 } else {
                     html! {}
@@ -351,20 +444,6 @@ pub fn wifi(props: &WifiProps) -> Html {
                 }
             }
         }
-
-        <input
-            type="button"
-            class={"button my-4"}
-            value="Save"
-            disabled={
-                matches!(&*ap_state, ApState::Errors)
-                || matches!(&*sta_state, StaState::Errors)
-                || *router_enabled && matches!(&*router_state, RouterState::Errors)
-                || *client_enabled && matches!(&*client_state, ClientState::Errors)
-                || conf.cloned().unwrap_or(Default::default()) == new_conf()
-            }
-            {onclick}
-        />
         </div>
         </>
     }

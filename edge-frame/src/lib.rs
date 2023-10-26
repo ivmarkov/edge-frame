@@ -27,8 +27,6 @@ pub use web::*;
 #[cfg(feature = "web")]
 #[path = "."]
 mod web {
-    use yew::{Callback, UseStateSetter};
-
     pub mod auth;
     pub mod field;
     pub mod frame;
@@ -38,13 +36,7 @@ mod web {
     pub mod role;
     pub mod util;
     pub mod wifi;
-
-    pub fn to_callback<T>(setter: UseStateSetter<T>) -> Callback<T>
-    where
-        T: 'static,
-    {
-        Callback::from(move |value| setter.set(value))
-    }
+    pub mod wifi_setup;
 }
 
 #[cfg(any(feature = "assets-serve", feature = "assets-prepare"))]

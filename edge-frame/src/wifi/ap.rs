@@ -9,6 +9,7 @@ use crate::util::*;
 
 pub type ApConf = AccessPointConfiguration;
 
+#[derive(Clone)]
 pub enum ApState {
     Unchanged,
     Errors,

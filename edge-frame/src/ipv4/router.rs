@@ -10,6 +10,7 @@ use crate::util::*;
 
 pub type RouterConf = ipv4::RouterConfiguration;
 
+#[derive(Clone)]
 pub enum RouterState {
     Unchanged,
     Errors,

@@ -9,6 +9,7 @@ use crate::util::*;
 
 pub type StaConf = ClientConfiguration;
 
+#[derive(Clone)]
 pub enum StaState {
     Unchanged,
     Errors,
