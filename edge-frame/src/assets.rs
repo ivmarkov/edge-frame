@@ -92,8 +92,6 @@ pub mod serve {
     }
 
     pub mod asynch {
-        use core::future::Future;
-
         use embedded_svc::http::server::asynch::{Connection, Handler, Request};
         use embedded_svc::utils::http::Headers;
 
@@ -117,7 +115,7 @@ pub mod serve {
             type Error = C::Error;
 
             async fn handle(&self, connection: &mut C) -> Result<(), Self::Error> {
-                async move { serve_asset_data(Request::wrap(connection), self.0.clone(), &self.1).await }
+                serve_asset_data(Request::wrap(connection), self.0.clone(), &self.1).await
             }
         }
 
