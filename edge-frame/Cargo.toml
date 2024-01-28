@@ -16,7 +16,7 @@ default = ["web"]
 web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "yewdux", "yewdux-middleware", "dto", "embedded-svc/std", "wasm-bindgen", "wasm-bindgen-futures", "anyhow", "futures", "postcard", "gloo-net", "embassy-sync"]
 dto = ["serde", "enumset", "strum", "strum_macros", "num_enum"]
 assets-serve = ["heapless", "log", "embedded-svc"]
-assets-prepare = ["anyhow", "flate2"]
+assets-prepare = ["anyhow/std", "flate2"]
 
 [dependencies]
 anyhow = { version = "1", default-features = false, optional = true }
