@@ -70,6 +70,7 @@ impl Default for WifiConfScope {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum WifiState {
     Unchanged,
