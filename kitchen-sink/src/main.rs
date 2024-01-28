@@ -8,7 +8,6 @@ use log::Level;
 
 use yew::prelude::*;
 use yew_router::prelude::*;
-use yewdux_middleware::context::MiddlewareContext;
 use yewdux_middleware::*;
 
 use edge_frame::frame::*;

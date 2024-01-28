@@ -19,7 +19,6 @@ use postcard::to_allocvec;
 use wasm_bindgen::JsError;
 use wasm_bindgen_futures::spawn_local;
 
-use yewdux_middleware::context::MiddlewareContext;
 use yewdux_middleware::*;
 
 pub fn log_msg<M, D>(level: Level) -> impl Fn(&MiddlewareContext, M, D)
