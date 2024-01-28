@@ -49,13 +49,15 @@ where
 }
 
 #[allow(clippy::await_holding_refcell_ref)]
-pub fn send_local<M>(sender: impl Into<channel::DynamicSender<'static, M>>) -> impl Fn(M)
+pub fn send_local<M>(
+    sender: impl Into<channel::DynamicSender<'static, M>>,
+) -> impl Fn(&MiddlewareContext, M)
 where
     M: Debug + 'static,
 {
     let sender = Rc::new(RefCell::new(sender.into()));
 
-    move |msg| {
+    move |_mcx, msg| {
         let sender = sender.clone();
 
         spawn_local(async move {
@@ -104,13 +106,13 @@ fn open_url(url: &str) -> Result<(SplitSink<WebSocket, Message>, SplitStream<Web
 }
 
 #[allow(clippy::await_holding_refcell_ref)]
-pub fn send<M>(sender: SplitSink<WebSocket, Message>) -> impl Fn(M)
+pub fn send<M>(sender: SplitSink<WebSocket, Message>) -> impl Fn(&MiddlewareContext, M)
 where
     M: Serialize + Debug + 'static,
 {
     let sender = Rc::new(RefCell::new(sender));
 
-    move |msg| {
+    move |_ctx, msg| {
         let sender = sender.clone();
 
         spawn_local(async move {
