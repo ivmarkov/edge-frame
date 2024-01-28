@@ -4,7 +4,7 @@ pub const MAX_ASSETS: usize = 10;
 pub mod serve {
     use core::fmt::Debug;
 
-    use embedded_svc::http::server::{Connection, HandlerResult, Request};
+    use embedded_svc::http::server::{Connection, Request};
     use embedded_svc::utils::http::Headers;
 
     use embedded_svc::io::Write;
@@ -61,7 +61,7 @@ pub mod serve {
         };
     }
 
-    pub fn serve<C: Connection>(request: Request<C>, asset: Asset) -> HandlerResult {
+    pub fn serve<C: Connection>(request: Request<C>, asset: Asset) -> Result<(), C::Error> {
         serve_asset_data(request, AssetMetadata::derive(asset.0), asset.1)
     }
 
@@ -69,7 +69,7 @@ pub mod serve {
         request: Request<C>,
         asset_metadata: AssetMetadata<'static>,
         data: &'static [u8],
-    ) -> HandlerResult {
+    ) -> Result<(), C::Error> {
         let mut headers = Headers::<3>::new();
 
         if let Some(cache_control) = &asset_metadata.cache_control {
@@ -94,7 +94,7 @@ pub mod serve {
     pub mod asynch {
         use core::future::Future;
 
-        use embedded_svc::http::server::asynch::{Connection, Handler, HandlerResult, Request};
+        use embedded_svc::http::server::asynch::{Connection, Handler, Request};
         use embedded_svc::utils::http::Headers;
 
         use embedded_svc::io::asynch::Write;
@@ -114,14 +114,17 @@ pub mod serve {
         }
 
         impl<C: Connection> Handler<C> for AssetHandler {
-            type HandleFuture<'a> = impl Future<Output = HandlerResult> where Self: 'a, C: 'a;
+            type Error = C::Error;
 
-            fn handle<'a>(&'a self, connection: &'a mut C) -> Self::HandleFuture<'a> {
+            async fn handle(&self, connection: &mut C) -> Result<(), Self::Error> {
                 async move { serve_asset_data(Request::wrap(connection), self.0.clone(), &self.1).await }
             }
         }
 
-        pub async fn serve<C: Connection>(request: Request<C>, asset: Asset) -> HandlerResult {
+        pub async fn serve<C: Connection>(
+            request: Request<C>,
+            asset: Asset,
+        ) -> Result<(), C::Error> {
             serve_asset_data(request, AssetMetadata::derive(asset.0), asset.1).await
         }
 
@@ -129,7 +132,7 @@ pub mod serve {
             request: Request<C>,
             asset_metadata: AssetMetadata<'static>,
             data: &'static [u8],
-        ) -> HandlerResult {
+        ) -> Result<(), C::Error> {
             let mut headers = Headers::<3>::new();
 
             if let Some(cache_control) = &asset_metadata.cache_control {
