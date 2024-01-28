@@ -91,7 +91,6 @@ pub mod serve {
         Ok(())
     }
 
-    #[cfg(feature = "nightly")]
     pub mod asynch {
         use core::future::Future;
 

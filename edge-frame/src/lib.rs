@@ -1,11 +1,8 @@
 #![allow(clippy::let_unit_value)]
+#![allow(async_fn_in_trait)]
 #![cfg_attr(
     any(feature = "assets-serve", all(feature = "dto", not(feature = "web"))),
     no_std
-)]
-#![cfg_attr(
-    all(feature = "nightly", feature = "assets-serve"),
-    feature(type_alias_impl_trait)
 )]
 #![cfg_attr(feature = "web", recursion_limit = "1024")]
 
