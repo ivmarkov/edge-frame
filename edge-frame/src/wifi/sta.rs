@@ -106,10 +106,15 @@ pub fn sta(props: &StaProps) -> Html {
                     StaState::Unchanged
                 } else {
                     StaState::Conf(ClientConfiguration {
-                        ssid: ssid.value().unwrap().as_str().into(),
+                        ssid: ssid.value().unwrap().as_str().try_into().unwrap(),
 
                         auth_method: auth.value().unwrap(),
-                        password: password.value().unwrap_or_default().as_str().into(),
+                        password: password
+                            .value()
+                            .unwrap_or_default()
+                            .as_str()
+                            .try_into()
+                            .unwrap(),
                         ..Default::default()
                     })
                 }

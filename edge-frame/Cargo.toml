@@ -2,19 +2,18 @@
 name = "edge-frame"
 version = "0.7.0"
 authors = ["Ivan Markov <ivan.markov@gmail.com>"]
-edition = "2018"
+edition = "2021"
 resolver = "2"
 categories = ["embedded", "hardware-support", "ui"]
 keywords = ["ui", "embedded", "frame", "yew", "svc"]
 description = "Yew & Wasm-based user interface for microcontrollers."
 repository = "https://github.com/ivmarkov/edge-frame"
 license = "MIT OR Apache-2.0"
-rust-version = "1.67"
+rust-version = "1.75"
 
 [features]
 default = ["web"]
 web = ["log", "derive_more", "wasm-logger", "web-sys", "yew", "yew-router", "yewdux", "yewdux-middleware", "dto", "embedded-svc/std", "wasm-bindgen", "wasm-bindgen-futures", "anyhow", "futures", "postcard", "gloo-net", "embassy-sync"]
-nightly = ["embedded-svc?/nightly"]
 dto = ["serde", "enumset", "strum", "strum_macros", "num_enum"]
 assets-serve = ["heapless", "log", "embedded-svc"]
 assets-prepare = ["anyhow", "flate2"]
@@ -22,24 +21,24 @@ assets-prepare = ["anyhow", "flate2"]
 [dependencies]
 anyhow = { version = "1", default-features = false, optional = true }
 log = { version = "0.4", optional = true }
-heapless = { version = "0.7", optional = true, default-features = false }
+heapless = { version = "0.8", optional = true, default-features = false }
 derive_more = { version = "0.99", optional = true }
 wasm-logger = { version = "0.2", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["console"] }
 yew = { version = "0.21", optional = true, default-features = false }
 yew-router = { version = "0.18", optional = true }
-yewdux = { version = "0.9", default-features = false, optional = true }
+yewdux = { version = "0.10", default-features = false, optional = true }
 yewdux-middleware = { version = "0.2", optional = true }
 serde = { version = "1", default-features = false, optional = true, features = ["derive"] }
 enumset = { version = "1", default-features = false, optional = true, features = ["serde"] }
 strum = { version = "0.25", default-features = false, optional = true, features = ["derive"] }
 strum_macros = { version = "0.25", optional = true }
 num_enum = { version = "0.7", default-features = false, optional = true }
-embedded-svc = { version = "0.26", optional = true, default-features = false, features = ["use_serde", "use_strum", "use_numenum"] }
+embedded-svc = { version = "0.27", optional = true, default-features = false, features = ["use_serde", "use_strum", "use_numenum"] }
 flate2 = { version = "1", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 futures = { version = "0.3", optional = true }
 postcard = { version = "1", features = ["alloc"], optional = true }
 gloo-net = { version = "0.4", optional = true }
-embassy-sync = { version = "0.3", optional = true }
+embassy-sync = { version = "0.5", optional = true }

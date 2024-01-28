@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use yew::prelude::*;
 use yew_router::prelude::*;
+use yewdux::use_store_value;
 use yewdux_middleware::*;
 
 use crate::auth::*;
@@ -51,6 +52,7 @@ pub struct RoleProps {
 
 #[function_component(Role)]
 pub fn role(props: &RoleProps) -> Html {
+    let mcx = use_mcx();
     let role = use_store_value::<RoleStore>();
     let role = role.0.as_ref();
 
@@ -75,7 +77,7 @@ pub fn role(props: &RoleProps) -> Html {
             // Not authenticated yet or previous authentication attempt failed => render login dialog if auth=true
             let submit = {
                 Callback::from(move |(username, password)| {
-                    dispatch::invoke(RoleState::Authenticating(Credentials {
+                    mcx.invoke(RoleState::Authenticating(Credentials {
                         username,
                         password,
                     }));
@@ -115,6 +117,7 @@ pub struct RoleLogoutStatusItemProps<R: Routable + PartialEq + Clone + 'static> 
 pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static>(
     props: &RoleLogoutStatusItemProps<R>,
 ) -> Html {
+    let mcx = use_mcx();
     let role = use_store_value::<RoleStore>();
     let role = role.0.as_ref();
 
@@ -127,7 +130,7 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static>(
                 let role_value = *role_value;
 
                 Callback::from(move |_| {
-                    dispatch::invoke(RoleState::LoggingOut(role_value));
+                    mcx.invoke(RoleState::LoggingOut(role_value));
 
                     if let Some(history) = history.as_ref() {
                         history.push(&auth_status_route);

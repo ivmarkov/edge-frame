@@ -106,11 +106,16 @@ pub fn ap(props: &ApProps) -> Html {
                     ApState::Unchanged
                 } else {
                     ApState::Conf(AccessPointConfiguration {
-                        ssid: ssid.value().unwrap().as_str().into(),
+                        ssid: ssid.value().unwrap().as_str().try_into().unwrap(),
                         ssid_hidden: hidden_ssid.value().unwrap(),
 
                         auth_method: auth.value().unwrap(),
-                        password: password.value().unwrap_or_default().as_str().into(),
+                        password: password
+                            .value()
+                            .unwrap_or_default()
+                            .as_str()
+                            .try_into()
+                            .unwrap(),
                         ..Default::default()
                     })
                 }

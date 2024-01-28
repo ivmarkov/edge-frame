@@ -4,13 +4,14 @@
 name = "kitchen-sink"
 version = "0.7.0"
 authors = ["Ivan Markov <ivan.markov@gmail.com>"]
-edition = "2018"
+edition = "2021"
 resolver = "2"
 categories = ["embedded", "hardware-support", "ui"]
 keywords = ["ui", "embedded", "frame", "yew", "svc"]
 description = "Yew & Wasm-based user interface for microcontrollers."
 repository = "https://github.com/ivmarkov/edge-frame"
 license = "MIT OR Apache-2.0"
+rust-version = "1.75"
 #forced-target = "wasm32-unknown-unknown"
 
 [dependencies]

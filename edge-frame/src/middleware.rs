@@ -19,32 +19,33 @@ use postcard::to_allocvec;
 use wasm_bindgen::JsError;
 use wasm_bindgen_futures::spawn_local;
 
+use yewdux_middleware::context::MiddlewareContext;
 use yewdux_middleware::*;
 
-pub fn log_msg<M, D>(level: Level) -> impl Fn(M, D)
+pub fn log_msg<M, D>(level: Level) -> impl Fn(&MiddlewareContext, M, D)
 where
     M: Debug,
     D: MiddlewareDispatch<M>,
 {
-    move |msg, dispatch| {
+    move |mcx, msg, dispatch| {
         log!(level, "Dispatching message: {:?}", msg);
 
-        dispatch.invoke(msg);
+        dispatch.invoke(mcx, msg);
     }
 }
 
-pub fn log_store<S, M, D>(level: Level) -> impl Fn(M, D)
+pub fn log_store<S, M, D>(level: Level) -> impl Fn(&MiddlewareContext, M, D)
 where
     S: Store + Debug,
     M: Reducer<S> + Debug,
     D: MiddlewareDispatch<M>,
 {
-    move |msg, dispatch| {
-        log!(level, "Store (before): {:?}", yewdux::dispatch::get::<S>());
+    move |mcx, msg, dispatch| {
+        log!(level, "Store (before): {:?}", mcx.context().get::<S>());
 
-        dispatch.invoke(msg);
+        dispatch.invoke(mcx, msg);
 
-        log!(level, "Store (after): {:?}", yewdux::dispatch::get::<S>());
+        log!(level, "Store (after): {:?}", mcx.context().get::<S>());
     }
 }
 
@@ -68,10 +69,13 @@ where
     }
 }
 
-pub fn receive_local<M>(receiver: impl Into<channel::DynamicReceiver<'static, M>>)
-where
+pub fn receive_local<M>(
+    mcx: &MiddlewareContext,
+    receiver: impl Into<channel::DynamicReceiver<'static, M>>,
+) where
     M: Debug + 'static,
 {
+    let mcx = mcx.clone();
     let receiver = receiver.into();
 
     spawn_local(async move {
@@ -79,7 +83,7 @@ where
             let event = receiver.receive().await;
             trace!("Received event: {:?}", event);
 
-            dispatch::invoke(event);
+            mcx.invoke(event);
         }
     });
 }
@@ -123,16 +127,18 @@ where
     }
 }
 
-pub fn receive<M>(mut receiver: SplitStream<WebSocket>)
+pub fn receive<M>(mcx: &MiddlewareContext, mut receiver: SplitStream<WebSocket>)
 where
     M: DeserializeOwned + Debug + 'static,
 {
+    let mcx = mcx.clone();
+
     spawn_local(async move {
         loop {
             let event = receiver.next().await.unwrap().unwrap();
             trace!("Received event: {:?}", event);
 
-            dispatch::invoke(event);
+            mcx.invoke(event);
         }
     });
 }

@@ -8,6 +8,7 @@ use log::Level;
 
 use yew::prelude::*;
 use yew_router::prelude::*;
+use yewdux_middleware::context::MiddlewareContext;
 use yewdux_middleware::*;
 
 use edge_frame::frame::*;
@@ -27,8 +28,10 @@ enum Routes {
 
 #[function_component(App)]
 fn app() -> Html {
+    let mcx = use_mcx();
+
     use_effect_with((), move |_| {
-        init_middleware();
+        init_middleware(&mcx);
 
         move || ()
     });
@@ -82,12 +85,12 @@ fn render(route: Routes) -> Html {
     }
 }
 
-fn init_middleware() {
-    dispatch::register(store_dispatch::<RoleStore, RoleState>());
-    dispatch::register(store_dispatch::<WifiConfStore, WifiConf>());
+fn init_middleware(mcx: &MiddlewareContext) {
+    mcx.register(store_dispatch::<RoleStore, RoleState>());
+    mcx.register(store_dispatch::<WifiConfStore, WifiConf>());
 
-    dispatch::invoke(RoleState::Role(RoleDto::Admin));
-    dispatch::invoke(WifiConf::default());
+    mcx.invoke(RoleState::Role(RoleDto::Admin));
+    mcx.invoke(WifiConf::default());
 }
 
 // Set the middleware for each store type
@@ -97,7 +100,7 @@ where
     M: Reducer<S> + Debug + 'static,
 {
     // Update store
-    dispatch::store
+    MiddlewareContext::store
         // Log store before/after dispatching
         .fuse(Rc::new(log_store(Level::Trace)))
         // Log msg before dispatching

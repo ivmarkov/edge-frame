@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use yew::prelude::*;
 use yew_router::Routable;
+use yewdux::use_store_value;
 use yewdux_middleware::*;
 
 use crate::frame::{RouteNavItem, RouteStatusItem};
@@ -66,6 +67,7 @@ pub struct WifiSetupProps {
 
 #[function_component(WifiSetup)]
 pub fn wifi_setup(props: &WifiSetupProps) -> Html {
+    let mcx = use_mcx();
     let conf_store = use_store_value::<WifiConfStore>();
 
     let state = use_state(|| WifiState::Unchanged);
@@ -83,7 +85,7 @@ pub fn wifi_setup(props: &WifiSetupProps) -> Html {
 
         Callback::from(move |_| {
             if let WifiState::Conf(conf) = (&*state).clone() {
-                dispatch::invoke(Some(conf));
+                mcx.invoke(Some(conf));
             }
         })
     };
