@@ -73,7 +73,7 @@ pub mod serve {
         let mut headers = Headers::<4>::new();
 
         let mut content_len_buf = heapless::String::<20>::new();
-        headers.set_content_len(content_len, &mut content_len_buf);
+        headers.set_content_len(data.len() as _, &mut content_len_buf);
 
         if let Some(cache_control) = &asset_metadata.cache_control {
             headers.set_cache_control(cache_control);
@@ -137,7 +137,7 @@ pub mod serve {
             let mut headers = Headers::<4>::new();
 
             let mut content_len_buf = heapless::String::<20>::new();
-            headers.set_content_len(content_len, &mut content_len_buf);
+            headers.set_content_len(data.len() as _, &mut content_len_buf);
 
             if let Some(cache_control) = &asset_metadata.cache_control {
                 headers.set_cache_control(cache_control);
