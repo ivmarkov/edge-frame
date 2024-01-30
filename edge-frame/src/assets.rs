@@ -70,7 +70,10 @@ pub mod serve {
         asset_metadata: AssetMetadata<'static>,
         data: &'static [u8],
     ) -> Result<(), C::Error> {
-        let mut headers = Headers::<3>::new();
+        let mut headers = Headers::<4>::new();
+
+        let mut content_len_buf = heapless::String::<32>::new();
+        headers.set_content_len(content_len, &mut buf);
 
         if let Some(cache_control) = &asset_metadata.cache_control {
             headers.set_cache_control(cache_control);
@@ -131,7 +134,10 @@ pub mod serve {
             asset_metadata: AssetMetadata<'static>,
             data: &'static [u8],
         ) -> Result<(), C::Error> {
-            let mut headers = Headers::<3>::new();
+            let mut headers = Headers::<4>::new();
+
+            let mut content_len_buf = heapless::String::<32>::new();
+            headers.set_content_len(content_len, &mut buf);
 
             if let Some(cache_control) = &asset_metadata.cache_control {
                 headers.set_cache_control(cache_control);
