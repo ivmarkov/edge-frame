@@ -93,7 +93,7 @@ pub fn open(
     ws_endpoint: &str,
 ) -> Result<(SplitSink<WebSocket, Message>, SplitStream<WebSocket>), JsError> {
     open_url(&format!(
-        "ws://{}/{}",
+        "ws://{}{}",
         web_sys::window().unwrap().location().host().unwrap(),
         ws_endpoint,
     ))
