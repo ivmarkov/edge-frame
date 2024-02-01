@@ -1,6 +1,6 @@
 [package]
 name = "edge-frame"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Ivan Markov <ivan.markov@gmail.com>"]
 edition = "2021"
 resolver = "2"
@@ -28,7 +28,7 @@ web-sys = { version = "0.3", optional = true, features = ["console"] }
 yew = { version = "0.21", optional = true, default-features = false }
 yew-router = { version = "0.18", optional = true }
 yewdux = { version = "0.10", default-features = false, optional = true }
-yewdux-middleware = { version = "0.2", optional = true }
+yewdux-middleware = { version = "0.3", optional = true }
 serde = { version = "1", default-features = false, optional = true, features = ["derive"] }
 enumset = { version = "1", default-features = false, optional = true, features = ["serde"] }
 strum = { version = "0.25", default-features = false, optional = true, features = ["derive"] }

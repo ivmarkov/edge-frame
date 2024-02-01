@@ -2,7 +2,7 @@
 
 [package]
 name = "kitchen-sink"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Ivan Markov <ivan.markov@gmail.com>"]
 edition = "2021"
 resolver = "2"
@@ -21,7 +21,7 @@ derive_more = "0.99"
 wasm-logger = "0.2"
 yew = { version = "0.21", default-features = false, features = ["csr"] }
 yew-router = "0.18"
-yewdux-middleware = "0.2"
+yewdux-middleware = "0.3"
 edge-frame = { path = "../edge-frame" }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
