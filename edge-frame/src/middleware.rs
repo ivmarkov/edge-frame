@@ -139,7 +139,13 @@ where
             let event = receiver.next().await.unwrap().unwrap();
             trace!("Received event: {:?}", event);
 
-            mcx.invoke(event);
+            if let Message::Bytes(bytes) = event {
+                let event = postcard::from_bytes(&bytes).unwrap();
+
+                mcx.invoke::<M>(event);
+            } else {
+                panic!("Unexpected message type: Text");
+            }
         }
     });
 }
