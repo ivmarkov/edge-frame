@@ -320,6 +320,7 @@ pub fn frame(props: &FrameProps) -> Html {
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
                 </a>
             </div>
 
