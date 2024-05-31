@@ -141,7 +141,9 @@ pub fn role_logout_status_item<R: Routable + PartialEq + Clone + 'static>(
             html! {
                 <StatusItem
                     icon="fa-lg fa-solid fa-right-from-bracket"
-                    {selected}/>
+                    text="Logout"
+                    {selected}
+                />
             }
         }
         _ => {

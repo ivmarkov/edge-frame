@@ -172,6 +172,8 @@ pub struct StatusItemProps {
     /// The icon to display.
     #[prop_or_default]
     pub icon: String,
+    #[prop_or_default]
+    pub text: String,
 }
 
 #[function_component(StatusItem)]
@@ -183,9 +185,10 @@ pub fn status_item(props: &StatusItemProps) -> Html {
     };
 
     html! {
-        <div class="icon is-large">
-            <i class={props.icon.clone()} {onclick}></i>
-        </div>
+        <button class="button is-light" {onclick}>
+            <span class="icon"><i class={props.icon.clone()}></i></span>
+            <span>{&props.text}</span>
+        </button>
     }
 }
 
@@ -302,12 +305,6 @@ pub fn frame(props: &FrameProps) -> Html {
                     }
                 }
 
-                <div class="navbar-item">
-                    <div class="buttons">
-                        { for props.children.iter().filter(|child| matches!(child, FrameChild::Status(_))) }
-                    </div>
-                </div>
-
                 <a
                     href="javascript:void(0);"
                     role="button"
@@ -330,6 +327,11 @@ pub fn frame(props: &FrameProps) -> Html {
                 </div>
 
                 <div class="navbar-end">
+                    <div class="navbar-item">
+                        <div class="buttons">
+                            { for props.children.iter().filter(|child| matches!(child, FrameChild::Status(_))) }
+                        </div>
+                    </div>
                 </div>
             </div>
         </nav>
