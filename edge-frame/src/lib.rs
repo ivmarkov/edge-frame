@@ -30,6 +30,7 @@ mod web {
     pub mod ipv4;
     pub mod loading;
     pub mod middleware;
+    pub mod navbar;
     pub mod role;
     pub mod util;
     pub mod wifi;
