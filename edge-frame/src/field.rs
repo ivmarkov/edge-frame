@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use core::cell::RefCell;
+use core::fmt::Debug;
+
+use std::rc::Rc;
 
 use web_sys::Event;
 use yew::{Callback, UseStateHandle};
@@ -19,7 +22,7 @@ pub type CheckedField<S> = Field<bool, S>;
 
 impl<S> Field<String, S>
 where
-    S: Clone,
+    S: Clone + Debug,
 {
     pub fn text(
         initial_value: String,
@@ -37,7 +40,7 @@ where
 
 impl<S> Field<bool, S>
 where
-    S: Clone,
+    S: Clone + Debug,
 {
     pub fn checked(
         initial_value: bool,
@@ -55,8 +58,8 @@ where
 
 impl<R, S> Field<R, S>
 where
-    R: Default + Clone + PartialEq + 'static,
-    S: Clone,
+    R: Default + Clone + PartialEq + Debug + 'static,
+    S: Clone + Debug,
 {
     pub fn new(
         initial_value: Option<R>,
@@ -115,15 +118,30 @@ where
         let this = (*self).clone();
 
         move |event| {
-            this.on_change(event.into());
-            callback.emit(());
+            this.do_change(event.into(), &callback);
         }
     }
 
-    pub fn on_change(&self, event: Event) {
+    pub fn do_change(&self, event: Event, callback: &Callback<()>) {
         let value = self.converter.emit(event);
+
+        self.do_update(value, callback);
+    }
+
+    pub fn update<V>(&self, raw_value: R, callback: Callback<()>) -> impl Fn(V) {
+        let this = (*self).clone();
+
+        move |_| {
+            this.do_update(raw_value.clone(), &callback);
+        }
+    }
+
+    pub fn do_update(&self, value: R, callback: &Callback<()>) {
+        log::debug!("Updating with {:?}", value);
 
         *self.raw_value.borrow_mut() = Some(value.clone());
         self.value_state.set(Some(value));
+
+        callback.emit(());
     }
 }
