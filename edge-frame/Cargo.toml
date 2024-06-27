@@ -9,7 +9,7 @@ keywords = ["ui", "embedded", "frame", "yew", "svc"]
 description = "Yew & Wasm-based user interface for microcontrollers."
 repository = "https://github.com/ivmarkov/edge-frame"
 license = "MIT OR Apache-2.0"
-rust-version = "1.75"
+rust-version = "1.77"
 
 [features]
 default = ["web"]
