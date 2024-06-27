@@ -34,11 +34,11 @@ enumset = { version = "1", default-features = false, optional = true, features =
 strum = { version = "0.25", default-features = false, optional = true, features = ["derive"] }
 strum_macros = { version = "0.25", optional = true }
 num_enum = { version = "0.7", default-features = false, optional = true }
-embedded-svc = { version = "0.27", optional = true, default-features = false, features = ["use_serde", "use_strum", "use_numenum"] }
+embedded-svc = { version = "0.28", optional = true, default-features = false, features = ["use_serde", "use_strum", "use_numenum"] }
 flate2 = { version = "1", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 futures = { version = "0.3", optional = true }
 postcard = { version = "1", features = ["alloc"], optional = true }
 gloo-net = { version = "0.4", optional = true }
-embassy-sync = { version = "0.5", optional = true }
+embassy-sync = { version = "0.6", optional = true }
